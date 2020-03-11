@@ -1,0 +1,670 @@
+# Differential Abundances
+
+```{r, eval=F}
+country_combos <- livestock_sample_metadata %>% 
+  # filter(species != "Fish") %>%
+  expand(nesting(species_a = species, country_a = country), 
+         nesting(species_b = species, country_b = country)) %>% 
+  filter(species_a == species_b,
+         country_a != country_b) %>% 
+  mutate(checksum = 2 ^ match(country_a, LETTERS) + 2 ^ match(country_b, LETTERS)) %>% 
+  group_by(species_a, checksum) %>% 
+  mutate(rank_combo = row_number(country_a)) %>% 
+  ungroup() %>% 
+  filter(rank_combo == 1) %>% 
+  mutate(print_statement = paste("Starting", row_number(), "of", nrow(.),
+                                 "-", species_a, country_a, "vs", country_b)) %>%
+  select(species_in = species_a, country_a, country_b, print_statement)
+
+SPECIES <- unique(livestock_sample_metadata$species)
+
+species_combos <- livestock_sample_metadata %>% 
+  # filter(species != "Fish") %>%
+  expand(species_a = species, species_b = species) %>% 
+  filter(species_a != species_b) %>% 
+  mutate(checksum = 2 ^ match(species_a, SPECIES) + 2 ^ match(species_b, SPECIES)) %>% 
+  group_by(checksum) %>% 
+  mutate(rank_combo = row_number(species_a)) %>% 
+  ungroup() %>% 
+  filter(rank_combo == 1) %>% 
+  mutate(print_statement = paste("Starting", row_number(), "of", nrow(.),
+                                 "-", species_a, "vs", species_b)) %>%
+  select(species_a, species_b, print_statement)
+warnings
+
+pairwise_metadata <- livestock_sample_metadata %>% 
+  filter(sample_id %in% include_samples,
+         ! sample_id %in% bad_fish)
+
+country_aldex <- function(species_in, country_a, country_b, print_statement, 
+                          counts, meta, denom_names, out_dir) { 
+  cat(print_statement, sep = "\n")
+  
+  samples_to_use <- filter(meta, species == species_in,
+                           country == country_a | country == country_b)
+  samples_to_use$country <- ifelse(samples_to_use$country == country_a, "country1", "country2")
+  
+  counts_tmp <- counts[intersect(samples_to_use$sample_id, rownames(counts)), ]
+  counts_tmp2 <- counts_tmp[, colSums(counts_tmp) > 0]
+  
+  denom_indices_to_use <- which(colnames(counts_tmp2) %in% denom_names)
+  
+  d.x <- aldex.clr(t(counts_tmp2), conds = samples_to_use$country, 
+                   denom = denom_indices_to_use, useMC = F)
+  d.eff <- aldex.effect(d.x, samples_to_use$country, CI = TRUE, useMC = TRUE)
+  d.tt <- aldex.ttest(d.x)
+  x.all <- data.frame(species = species_in,
+                      country1 = country_a,
+                      country2 = country_b,
+                      gene_id = rownames(d.tt),
+                      d.tt,
+                      d.eff)
+  write.csv2(x.all, paste0(out_dir, lubridate::today(), "-", species_in, "_", country_a, "_", country_b, ".csv"), row.names = F)
+  
+  return(TRUE)
+}
+
+species_aldex <- function(species_a, species_b, print_statement, 
+                          counts, meta, denom_names, out_dir) { 
+  cat(print_statement, sep = "\n")
+  
+  samples_to_use <- filter(meta, species == species_a | species == species_b)
+  samples_to_use$species <- ifelse(samples_to_use$species == species_a, "species1", "species2")
+  
+  counts_tmp <- counts[intersect(samples_to_use$sample_id, rownames(counts)), ]
+  counts_tmp2 <- counts_tmp[, colSums(counts_tmp) > 0]
+  
+  denom_indices_to_use <- which(colnames(counts_tmp2) %in% denom_names)
+  
+  d.x <- aldex.clr(t(counts_tmp2), conds = samples_to_use$species, denom = denom_indices_to_use)
+  d.eff <- aldex.effect(d.x, samples_to_use$species, CI = TRUE, useMC = TRUE)
+  d.tt <- aldex.ttest(d.x)
+  x.all <- data.frame(species1 = species_a,
+                      species2 = species_b,
+                      gene_id = rownames(d.tt),
+                      d.tt,
+                      d.eff)
+  write.csv2(x.all, paste0(out_dir, lubridate::today(), "-", species_a, "_", species_b, ".csv"), row.names = F)
+  
+  return(TRUE)
+}
+```
+
+```{r, eval=F}
+check_species_iqlr <- pmap_lgl(species_combos, species_aldex,  
+                               counts = res_wide, 
+                               meta = pairwise_metadata,
+                               denom_names = iqlr_denom_names,
+                               out_dir = "./output/species_iqlr/")
+```
+
+```{r, eval=F}
+check_country_iqlr <- pmap_lgl(country_combos, country_aldex,  
+                               counts = res_wide, 
+                               meta = pairwise_metadata,
+                               denom_names = iqlr_denom_names,
+                               out_dir = "./output/country_iqlr/")
+```
+
+```{r, eval=F}
+# check_pairwise_runs <- pmap_lgl(country_combos, country_aldex, 
+#                                 counts = res_wide, 
+#                                 meta = pairwise_metadata,
+#                                 out_dir = "./output/country_res/")
+```
+
+```{r, eval=F}
+# check_pairwise_class <- pmap_lgl(country_combos, country_aldex, 
+#                                  counts = class_wide, 
+#                                  meta = pairwise_metadata,
+#                                  out_dir = "./output/country_class/")
+```
+
+```{r, eval=F}
+# check_species_runs <- pmap_lgl(species_combos, species_aldex, 
+#                                counts = res_wide, 
+#                                meta = pairwise_metadata,
+#                                out_dir = "./output/species_res/")
+```
+
+```{r}
+species_pairwise_results <- map(list.files("./output/species_iqlr/", 
+                                           pattern = ".csv", 
+                                           full.names = T),
+                                read_csv2,
+                                col_types =
+                                  cols(
+                                    species1 = col_character(),
+                                    species2 = col_character(),
+                                    gene_id = col_character(),
+                                    we.ep = col_double(),
+                                    we.eBH = col_double(),
+                                    wi.ep = col_double(),
+                                    wi.eBH = col_double(),
+                                    rab.all = col_double(),
+                                    rab.win.species1 = col_double(),
+                                    rab.win.species2 = col_double(),
+                                    diff.btw = col_double(),
+                                    diff.win = col_double(),
+                                    effect = col_double(),
+                                    effect.low = col_double(),
+                                    effect.high = col_double(),
+                                    overlap = col_double()
+                                  )) %>% 
+  bind_rows() %>% 
+  mutate_at(vars(starts_with("species")), function(x) if_else(x == "Poultry", "Chicken", x)) %>% 
+  mutate(which_table = "original")
+
+species_reversed <- species_pairwise_results %>% 
+  mutate_at(vars(starts_with("effect")), function(x) -1 * x)  %>% 
+  mutate(which_table = "reversed") %>% 
+  select(species1 = species2, 
+         species2 = species1,
+         rab.win.species1 = rab.win.species2, 
+         rab.win.species2 = rab.win.species1,
+         everything())
+
+species_doubled <- bind_rows(species_pairwise_results, species_reversed) %>%
+  mutate_at(c("species1", "species2"), 
+            list(class = function(x) {
+              case_when(x == "Pig" | x == "Veal Calf" ~ 1,
+                        x == "Chicken" | x == "Turkey" ~ 2,
+                        x == "Fish" ~ 4,
+                        T ~ 99)})) %>% 
+  mutate(shift = abs(effect) > 1 & overlap < 0.05,
+         positive_shift = effect > 1 & overlap < 0.05,
+         negative_shift = effect < -1 & overlap < 0.05,
+         checksum = species1_class + species2_class,
+         comp_type = case_when(checksum == 2 | checksum == 4 ~ "same",
+                               checksum == 1 | checksum == 3 ~ "mixed",
+                               checksum > 4 ~ "fish"),
+         is_mixed = comp_type == "mixed",
+         is_same = comp_type == "same") %>% 
+  group_by(gene_id, checksum) %>% 
+  mutate(unique_w_mammal_first = case_when(is_mixed == F & which_table == "original" ~ T,
+                                           is_mixed & species1_class == 1 ~ T,
+                                           T ~ F)) %>% 
+  ungroup() %>% 
+  select(species1, species2, gene_id, effect, overlap, which_table, shift, 
+         positive_shift, negative_shift, comp_type,
+         is_mixed, is_same, unique_w_mammal_first)
+
+species_shifts_per_gene <- species_doubled %>% 
+  filter(positive_shift,
+         comp_type != "fish") %>%
+  group_by(gene_id) %>% 
+  summarise(per_gene_total = n(),
+            per_gene_mixed = sum(is_mixed),
+            per_gene_same = sum(is_same)) %>% 
+  # filter(per_gene_total > 1) %>% 
+  arrange(desc(per_gene_total)) %>% 
+  left_join(resfinder_metadata)
+
+species_shift_df <- species_doubled %>% 
+  filter(comp_type != "fish") %>% 
+  group_by(gene_id, species2) %>% 
+  summarise(pos_shifts = sum(positive_shift),
+            neg_shifts = sum(negative_shift)) %>% 
+  ungroup() %>% 
+  mutate(combined_shift = pos_shifts - neg_shifts,
+         pos_label = if_else(pos_shifts > 0, 
+                             paste0(pos_shifts, sprintf('\u25b2')), 
+                             as.character(NA)),
+         neg_label = if_else(neg_shifts > 0, 
+                             paste0(neg_shifts, sprintf('\u25bc')), 
+                             as.character(NA)),
+         combined_label = if_else(is.na(pos_label) & is.na(neg_label), 
+                                  as.character(NA),
+                                  str_replace_all(paste0(pos_label, neg_label), "NA", ""))) %>% 
+  rename(species = species2) %>% 
+  filter(gene_id %in% species_shifts_per_gene$gene_id) %>% 
+  left_join(resfinder_metadata) %>% 
+  left_join(distinct(livestock_sample_metadata, species, animal_group))
+
+species_plot_class_headers <- species_shifts_per_gene %>% 
+  distinct(amr_class) %>%
+  expand_grid(species = unique(species_shift_df$species)) %>% 
+  mutate(gene_id = amr_class,
+         short_gene = amr_class,
+         is_header = T,
+         mean_clr = NA,
+         median_clr = NA,
+         combined_shift = NA,
+         combined_label = NA,
+         combined_triangle = NA) %>% 
+  left_join(distinct(livestock_sample_metadata, species, animal_group))
+```
+
+```{r main-species-diffs-heat}
+species_shift_df %>% 
+  mutate(is_header = F) %>% 
+  bind_rows(species_plot_class_headers) %>%
+  arrange(desc(amr_class), is_header, desc(short_gene)) %>%
+  mutate(short_gene = fct_inorder(as_factor(short_gene)),
+         species = fct_relevel(species, "Pig", "Veal Calf")) %>%
+  ggplot(aes(x = species, y = short_gene, fill = combined_shift)) +
+  geom_tile() +
+  geom_text(aes(label = combined_label), size = 2.5) +
+  facet_grid(cols = vars(animal_group), rows = vars(amr_class), 
+             scales = "free", space = "free") +
+  scale_y_discrete(labels = c('Beta-Lactam' = expression(bold("Beta-Lactam")), 
+                              'Macrolide' = expression(bold(Macrolide)), 
+                              'Tetracycline' = expression(bold(Tetracycline)), 
+                              'Aminoglycoside' = expression(bold(Aminoglycoside)), 
+                              'Phenicol' = expression(bold(Phenicol)), 
+                              'Nitroimidazole' = expression(bold(Nitroimidazole)), 
+                              'Sulphonamide' = expression(bold(Sulphonamide)), 
+                              'Vancomycin' = expression(bold(Vancomycin)), 
+                              parse = TRUE)) + 
+  scale_fill_distiller(palette = "RdBu", na.value = "white",
+                       limits = c(-1 * max(species_shift_df$combined_shift), max(species_shift_df$combined_shift)),
+                       # guide = guide_colourbar(nbin = length(unique(species_shift_df$combined_shift)),
+                       #                         raster = F, ticks = F, barheight = 0.5,
+                       #                         title = NULL),
+                       guide = F) +
+  theme_minimal(base_size = 9) +
+  theme(axis.title = element_blank(),
+        legend.position = "bottom",
+        panel.grid = element_blank(),
+        strip.text = element_blank())
+
+ggsave("fig_species_diffs.pdf", width = 8.75, height = 17, units = "cm", device = cairo_pdf,
+       family = "Arial")
+```
+
+
+```{r supp-fig-species-diffs}
+viz_clr_long %>% 
+  filter(gene_id %in% species_shifts_per_gene$gene_id) %>%
+  filter(species != "Fish") %>% 
+  # mutate(species = fct_relevel(species, "Pig", "Veal Calf")) %>%
+  ggplot(., aes(x = species, y = clr, fill = species)) +
+  geom_label(aes(label = pos_label), y = 19,
+             data = species_shift_df, size = 2) +
+  geom_label(aes(label = neg_label), y = -6,
+             data = species_shift_df, size = 2) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_wrap(vars(amr_class, short_gene), ncol = 7, 
+             labeller = labeller(.multi_line = F)) +
+  scale_fill_manual(values = plot_colours$species) +
+  scale_x_discrete(limits = c("Chicken", "Turkey", "Pig", "Veal Calf")) +
+  labs(x = "Species", y = "CLR") +
+  guides(fill = F, alpha = F) +
+  ylim(-8, 21) +
+  theme_light(base_size = 8) +
+  theme(panel.grid.major.x = element_blank(),
+        axis.title.x = element_blank())
+
+scale_species_diffs <- 1.4
+ggsave("supp_species_diffs.pdf", width = 17.7 * scale_species_diffs, 
+       height = 21 * scale_species_diffs, units = "cm", device = cairo_pdf,
+       family = "Arial")
+```
+
+
+```{r}
+country_pairwise_results <- map(list.files("./output/country_iqlr/", 
+                                           pattern = ".csv", 
+                                           full.names = T),
+                                read_csv2,
+                                col_types =
+                                  cols(
+                                    species = col_character(),
+                                    country1 = col_character(),
+                                    country2 = col_character(),
+                                    gene_id = col_character(),
+                                    we.ep = col_double(),
+                                    we.eBH = col_double(),
+                                    wi.ep = col_double(),
+                                    wi.eBH = col_double(),
+                                    rab.all = col_double(),
+                                    rab.win.country1 = col_double(),
+                                    rab.win.country2 = col_double(),
+                                    diff.btw = col_double(),
+                                    diff.win = col_double(),
+                                    effect = col_double(),
+                                    effect.low = col_double(),
+                                    effect.high = col_double(),
+                                    overlap = col_double()
+                                  )) %>% 
+  bind_rows() %>% 
+  # mutate(species = if_else(species == "Poultry", "Chicken", species)) %>% 
+  mutate(which_table = "original")
+
+country_reversed <- country_pairwise_results %>% 
+  mutate_at(vars(starts_with("effect")), function(x) -1 * x)  %>% 
+  mutate(which_table = "reversed") %>%
+  select(species,
+         country1 = country2,
+         country2 = country1,
+         rab.win.country1 = rab.win.country2, 
+         rab.win.country2 = rab.win.country1,
+         everything())
+
+country_doubled <- bind_rows(country_pairwise_results, country_reversed) %>% 
+  mutate(shift = abs(effect) > 1 & overlap < 0.05,
+         positive_shift = effect > 1 & overlap < 0.05,
+         negative_shift = effect < -1 & overlap < 0.05) %>% 
+  select(species, country1, country2, gene_id, effect, overlap, which_table, shift, 
+         positive_shift, negative_shift)
+
+country_shifts_per_gene <- country_doubled %>% 
+  filter(positive_shift,
+         species != "Fish") %>%
+  group_by(species, gene_id) %>% 
+  summarise(per_gene_total = n()) %>% 
+  ungroup() %>% 
+  mutate(keep_gene = case_when(species %in% c("Pig", "Chicken") ~ T,
+                               species %in% c("Veal Calf", "Turkey") ~ T,
+                               T ~ F)) %>% 
+  filter(keep_gene) %>%
+  arrange(desc(per_gene_total)) %>% 
+  left_join(resfinder_metadata)
+
+country_shift_df <- country_doubled %>% 
+  filter(species != "Fish") %>% 
+  group_by(species, gene_id, country2) %>% 
+  summarise(pos_shifts = sum(positive_shift),
+            neg_shifts = sum(negative_shift)) %>% 
+  ungroup() %>%
+  group_by(species, gene_id) %>% 
+  mutate(max_pos = max(pos_shifts),
+         max_neg = max(neg_shifts)) %>% 
+  ungroup() %>% 
+  mutate(combined_shift = pos_shifts - neg_shifts,
+         pos_label = if_else(pos_shifts > 0, 
+                             paste0(pos_shifts, sprintf('\u25b2')), 
+                             as.character(NA)),
+         neg_label = if_else(neg_shifts > 0, 
+                             paste0(neg_shifts, sprintf('\u25bc')), 
+                             as.character(NA)),
+         combined_label = if_else(is.na(pos_label) & is.na(neg_label), 
+                                  as.character(NA),
+                                  str_replace_all(paste0(pos_label, neg_label), "NA", "")),
+         keep_gene = case_when(species %in% c("Pig", "Chicken") & max_pos > 2 ~ T,
+                               species %in% c("Pig", "Chicken") & max_neg > 2 ~ T,
+                               species %in% c("Veal Calf", "Turkey") & max_neg > 0 ~ T,
+                               species %in% c("Veal Calf", "Turkey") & max_pos > 0 ~ T,
+                               T ~ F)) %>% 
+  # filter(keep_gene) %>%
+  rename(country = country2) %>% 
+  filter(gene_id %in% country_shifts_per_gene$gene_id) %>% 
+  complete(gene_id, nesting(species, country), 
+           fill = list(combined_shift = 0)) %>% 
+  left_join(resfinder_metadata) %>%
+  left_join(distinct(livestock_sample_metadata, country, explicit_country))
+
+country_plot_class_headers <- country_shift_df %>% 
+  distinct(amr_class, species, country) %>% 
+  mutate(gene_id = amr_class,
+         short_gene = amr_class,
+         is_header = T,
+         mean_clr = NA,
+         median_clr = NA,
+         combined_shift = NA,
+         combined_label = NA) %>%
+  left_join(distinct(livestock_sample_metadata, country, explicit_country))
+```
+
+```{r}
+country_shift_df %>% 
+  mutate(is_header = F) %>% 
+  bind_rows(country_plot_class_headers) %>%
+  arrange(desc(amr_class), is_header, desc(short_gene)) %>%
+  mutate(short_gene = fct_inorder(as_factor(short_gene))) %>% 
+  # mutate(species = str_replace(species, "Veal Calf", "V. Calf")) %>% 
+  ggplot(aes(x = explicit_country, y = short_gene, fill = combined_shift)) +
+  geom_tile() +
+  geom_text(aes(label = combined_label), size = 2) +
+  # facet_grid(rows = vars(species),
+  #            scales = "free", space = "free") +
+  facet_grid(cols = vars(species), rows = vars(amr_class),
+             scales = "free", space = "free") +
+  scale_y_discrete(labels = c('Macrolide' = expression(bold(Macrolide)),
+                              'Tetracycline' = expression(bold(Tetracycline)),
+                              'Aminoglycoside' = expression(bold(Aminoglycoside)),
+                              'Beta-Lactam' = expression(bold("Beta-Lactam")),
+                              'Phenicol' = expression(bold(Phenicol)),
+                              'Quinolone' = expression(bold(Quinolone)),
+                              'Nitroimidazole' = expression(bold(Nitroimidazole)),
+                              'Sulphonamide' = expression(bold(Sulphonamide)),
+                              'Vancomycin' = expression(bold(Vancomycin)),
+                              parse = TRUE)) +
+  # scale_fill_gradient2(low = "#2166ac", high = "#b2182b", mid = "#f7f7f7", na.value = "white",
+  #                      # guide = guide_colourbar(nbin = length(unique(country_shift_df$combined_shift)),
+  #                      #                         raster = F, ticks = F, barheight = 0.5,
+  #                      #                         title = NULL),
+  #                      guide = F) +
+  scale_fill_distiller(palette = "RdBu", na.value = "white",
+                       limits = c(-1 * max(country_shift_df$combined_shift), max(country_shift_df$combined_shift)),
+                       # guide = guide_colourbar(nbin = length(unique(species_shift_df$combined_shift)),
+                       #                         raster = F, ticks = F, barheight = 0.5,
+                       #                         title = NULL),
+                       guide = F) +
+  theme_minimal(base_size = 9) +
+  theme(axis.title = element_blank(),
+        # strip.background = element_rect(fill = "grey85", colour = "grey85"),
+        # panel.border = element_rect(linetype = "solid", fill = NA, colour = "grey85"),
+        legend.position = "bottom",
+        panel.grid = element_blank(),
+        strip.text.y = element_blank())
+
+ggsave("fig_country_diffs.pdf", width = 17.7, height = 21, units = "cm", device = cairo_pdf,
+       family = "Arial")
+```
+
+```{r supp-fig-country-chicken, eval=FALSE}
+viz_clr_long %>% 
+  left_join(select(country_shifts_per_gene, species, gene_id, keep_gene)) %>% 
+  left_join(select(country_shift_df, species, country, gene_id, pos_label, neg_label)) %>% 
+  filter(keep_gene, species == "Chicken") %>% 
+  ggplot(., aes(x = explicit_country, y = clr, fill = explicit_country)) +
+  geom_label(aes(label = pos_label), y = 19, label.padding = unit(0.05, "cm"), 
+             # label.r = unit(0, "cm"),
+             size = 2) +
+  geom_label(aes(label = neg_label), y = -6, label.padding = unit(0.05, "cm"), 
+             # label.r = unit(0, "cm"),
+             size = 2) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_wrap(vars(amr_class, short_gene), ncol = 5, 
+             labeller = labeller(.multi_line = F)) +
+  scale_fill_manual(values = plot_colours$explicit_country) +
+  labs(x = "Country", y = "IQLR") +
+  guides(fill = F, alpha = F) +
+  ylim(-8, 21) +
+  theme_light(base_size = 9) +
+  theme(panel.grid.major.x = element_blank(),
+        axis.title.x = element_blank())
+
+scale_chicken <- 1.3
+ggsave("supp_chicken_country.pdf", 
+       width = 17.7 * scale_chicken, 
+       height = 20 * scale_chicken, 
+       units = "cm", device = cairo_pdf,
+       family = "Arial")
+```
+
+```{r supp-fig-country-pig, eval=FALSE}
+viz_clr_long %>% 
+  left_join(select(country_shifts_per_gene, species, gene_id, keep_gene)) %>% 
+  left_join(select(country_shift_df, species, country, gene_id, pos_label, neg_label)) %>% 
+  filter(keep_gene, species == "Pig") %>% 
+  ggplot(., aes(x = explicit_country, y = clr, fill = explicit_country)) +
+  geom_label(aes(label = pos_label), y = 19,  label.padding = unit(0.05, "cm"), size = 2.5) +
+  geom_label(aes(label = neg_label), y = -6,  label.padding = unit(0.05, "cm"), size = 2.5) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_wrap(vars(amr_class, short_gene), ncol = 4, 
+             labeller = labeller(.multi_line = F)) +
+  scale_fill_manual(values = plot_colours$explicit_country) +
+  labs(x = "Country", y = "IQLR") +
+  guides(fill = F, alpha = F) +
+  ylim(-8, 21) +
+  theme_light(base_size = 9) +
+  theme(panel.grid.major.x = element_blank(),
+        axis.title.x = element_blank())
+
+scale_pig <- 1.2
+ggsave("supp_pig_country.pdf", height = 20 * scale_pig, width = 17.7 * scale_pig, units = "cm", device = cairo_pdf,
+       family = "Arial")
+```
+
+```{r supp-fig-country-others, eval=FALSE}
+viz_clr_long %>% 
+  left_join(select(country_shifts_per_gene, species, gene_id, keep_gene)) %>% 
+  left_join(select(country_shift_df, species, country, gene_id, pos_label, neg_label)) %>% 
+  filter(keep_gene, species %in% c("Veal Calf", "Turkey")) %>% 
+  ggplot(., aes(x = explicit_country, y = clr, fill = explicit_country)) +
+  geom_label(aes(label = pos_label), y = 19, size = 2.5) +
+  geom_label(aes(label = neg_label), y = -6, size = 2.5) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_wrap(vars(species, amr_class, short_gene), ncol = 3, 
+             labeller = labeller(.multi_line = F)) +
+  scale_fill_manual(values = plot_colours$explicit_country) +
+  labs(x = "Country", y = "IQLR") +
+  guides(fill = F, alpha = F) +
+  ylim(-8, 21) +
+  theme_light(base_size = 9) +
+  theme(panel.grid.major.x = element_blank(),
+        axis.title.x = element_blank())
+
+ggsave("supp_vc_turkey_country.pdf", height = 7, width = 17.7, units = "cm", device = cairo_pdf,
+       family = "Arial")
+```
+
+```{r}
+# p_pig <- country_shift_df %>% 
+#   mutate(is_header = F) %>% 
+#   bind_rows(country_plot_class_headers) %>%
+#   filter(species == "Pig") %>%
+#   arrange(desc(amr_class), is_header, desc(short_gene)) %>%
+#   mutate(short_gene = fct_inorder(as_factor(short_gene))) %>%
+#   left_join(distinct(livestock_sample_metadata, country, explicit_country)) %>% 
+#   ggplot(aes(x = explicit_country, y = short_gene, fill = combined_shift)) +
+#   geom_tile() +
+#   geom_text(aes(label = combined_label), size = 2.5) +
+#   facet_grid(rows = vars(amr_class), cols = vars(species),
+#              scales = "free", space = "free") +
+#   scale_y_discrete(labels = c('Macrolide' = expression(bold(Macrolide)),
+#                               'Tetracycline' = expression(bold(Tetracycline)),
+#                               'Aminoglycoside' = expression(bold(Aminoglycoside)),
+#                               'Beta-Lactam' = expression(bold("Beta-Lactam")),
+#                               'Phenicol' = expression(bold(Phenicol)),
+#                               'Quinolone' = expression(bold(Quinolone)),
+#                               'Nitroimidazole' = expression(bold(Nitroimidazole)),
+#                               'Sulphonamide' = expression(bold(Sulphonamide)),
+#                               'Vancomycin' = expression(bold(Vancomycin)),
+#                               parse = TRUE)) +
+#   scale_fill_gradient2(low = "#2166ac", high = "#b2182b", mid = "#f7f7f7", na.value = "white",
+#                        # guide = guide_colourbar(nbin = length(unique(country_shift_df$combined_shift)),
+#                        #                         raster = F, ticks = F, barheight = 0.5,
+#                        #                         title = NULL),
+#                        guide = F) +
+#   theme_minimal(base_size = 9) +
+#   theme(axis.title = element_blank(),
+#         legend.position = "bottom",
+#         panel.grid = element_blank(),
+#         strip.text.y = element_blank())
+# 
+# p_chicken <- country_shift_df %>% 
+#   mutate(is_header = F) %>% 
+#   bind_rows(country_plot_class_headers) %>%
+#   filter(species == "Chicken") %>%
+#   arrange(desc(amr_class), is_header, desc(short_gene)) %>%
+#   mutate(short_gene = fct_inorder(as_factor(short_gene))) %>%
+#   left_join(distinct(livestock_sample_metadata, country, explicit_country)) %>% 
+#   ggplot(aes(x = explicit_country, y = short_gene, fill = combined_shift)) +
+#   geom_tile() +
+#   geom_text(aes(label = combined_label), size = 2.5) +
+#   facet_grid(rows = vars(amr_class), cols = vars(species),
+#              scales = "free", space = "free") +
+#   scale_y_discrete(labels = c('Macrolide' = expression(bold(Macrolide)),
+#                               'Tetracycline' = expression(bold(Tetracycline)),
+#                               'Aminoglycoside' = expression(bold(Aminoglycoside)),
+#                               'Beta-Lactam' = expression(bold("Beta-Lactam")),
+#                               'Phenicol' = expression(bold(Phenicol)),
+#                               'Quinolone' = expression(bold(Quinolone)),
+#                               'Nitroimidazole' = expression(bold(Nitroimidazole)),
+#                               'Sulphonamide' = expression(bold(Sulphonamide)),
+#                               'Vancomycin' = expression(bold(Vancomycin)),
+#                               parse = TRUE)) +
+#   scale_fill_gradient2(low = "#2166ac", high = "#b2182b", mid = "#f7f7f7", na.value = "white",
+#                        # guide = guide_colourbar(nbin = length(unique(country_shift_df$combined_shift)),
+#                        #                         raster = F, ticks = F, barheight = 0.5,
+#                        #                         title = NULL),
+#                        guide = F) +
+#   theme_minimal(base_size = 9) +
+#   theme(axis.title = element_blank(),
+#         legend.position = "bottom",
+#         panel.grid = element_blank(),
+#         strip.text.y = element_blank())
+# 
+# p_turkey <- country_shift_df %>% 
+#   mutate(is_header = F) %>% 
+#   bind_rows(country_plot_class_headers) %>%
+#   filter(species == "Turkey") %>%
+#   arrange(desc(amr_class), is_header, desc(short_gene)) %>%
+#   mutate(short_gene = fct_inorder(as_factor(short_gene))) %>%
+#   left_join(distinct(livestock_sample_metadata, country, explicit_country)) %>% 
+#   ggplot(aes(x = explicit_country, y = short_gene, fill = combined_shift)) +
+#   geom_tile() +
+#   geom_text(aes(label = combined_label), size = 2.5) +
+#   facet_grid(rows = vars(amr_class), cols = vars(species),
+#              scales = "free", space = "free") +
+#   scale_y_discrete(labels = c('Macrolide' = expression(bold(Macrolide)),
+#                               'Tetracycline' = expression(bold(Tetracycline)),
+#                               'Aminoglycoside' = expression(bold(Aminoglycoside)),
+#                               'Beta-Lactam' = expression(bold("Beta-Lactam")),
+#                               'Phenicol' = expression(bold(Phenicol)),
+#                               'Quinolone' = expression(bold(Quinolone)),
+#                               'Nitroimidazole' = expression(bold(Nitroimidazole)),
+#                               'Sulphonamide' = expression(bold(Sulphonamide)),
+#                               'Vancomycin' = expression(bold(Vancomycin)),
+#                               parse = TRUE)) +
+#   scale_fill_gradient2(low = "#2166ac", high = "#b2182b", mid = "#f7f7f7", na.value = "white",
+#                        # guide = guide_colourbar(nbin = length(unique(country_shift_df$combined_shift)),
+#                        #                         raster = F, ticks = F, barheight = 0.5,
+#                        #                         title = NULL),
+#                        guide = F) +
+#   theme_minimal(base_size = 9) +
+#   theme(axis.title = element_blank(),
+#         legend.position = "bottom",
+#         panel.grid = element_blank(),
+#         strip.text.y = element_blank())
+# 
+# p_veal <- country_shift_df %>% 
+#   mutate(is_header = F) %>% 
+#   bind_rows(country_plot_class_headers) %>% 
+#   filter(species == "Veal Calf") %>%
+#   arrange(desc(amr_class), is_header, desc(short_gene)) %>%
+#   mutate(short_gene = fct_inorder(as_factor(short_gene))) %>%
+#   left_join(distinct(livestock_sample_metadata, country, explicit_country)) %>% 
+#   ggplot(aes(x = explicit_country, y = short_gene, fill = combined_shift)) +
+#   geom_tile() +
+#   geom_text(aes(label = combined_label), size = 2.5) +
+#   facet_grid(rows = vars(amr_class), cols = vars(species),
+#              scales = "free", space = "free") +
+#   scale_y_discrete(labels = c('Macrolide' = expression(bold(Macrolide)),
+#                               'Tetracycline' = expression(bold(Tetracycline)),
+#                               'Aminoglycoside' = expression(bold(Aminoglycoside)),
+#                               'Beta-Lactam' = expression(bold("Beta-Lactam")),
+#                               'Phenicol' = expression(bold(Phenicol)),
+#                               'Quinolone' = expression(bold(Quinolone)),
+#                               'Nitroimidazole' = expression(bold(Nitroimidazole)),
+#                               'Sulphonamide' = expression(bold(Sulphonamide)),
+#                               'Vancomycin' = expression(bold(Vancomycin)),
+#                               parse = TRUE)) +
+#   scale_fill_gradient2(low = "#2166ac", high = "#b2182b", mid = "#f7f7f7", na.value = "white",
+#                        # guide = guide_colourbar(nbin = length(unique(country_shift_df$combined_shift)),
+#                        #                         raster = F, ticks = F, barheight = 0.5,
+#                        #                         title = NULL),
+#                        guide = F) +
+#   theme_minimal(base_size = 9) +
+#   theme(axis.title = element_blank(),
+#         legend.position = "bottom",
+#         panel.grid = element_blank(),
+#         strip.text.y = element_blank())
+# 
+# stitched_countrydiffs <- plot_grid(p_pig, p_chicken, p_turkey, p_veal,
+#                                    ncol = 1,
+#                                    align = "v", axis = "l", rel_heights = c(6, 2, 1.6, 0.8))
+```

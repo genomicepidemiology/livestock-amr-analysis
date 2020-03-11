@@ -1,0 +1,14 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.DS_Store
+livestock-amr-analysis.Rproj
+# More files we dont want for now
+timo_update/
+output/
+docs/
+*.pdf
+*.png
+*.html
+*.zip

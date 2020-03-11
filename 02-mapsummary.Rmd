@@ -1,0 +1,311 @@
+# Mapping: Summary Statistics
+
+## Genomic Summary
+
+### Number of Genomic Hits
+```{r pkgs-part2, eval=FALSE}
+library(mapstatHelpers)
+```
+
+```{r big-import}
+gen_mapstats <- 
+  read_multiple_mapstats("../kma_EFFORT/data/final_mapstats/genomic_20190404/") %>% 
+  filter(sample_id %in% include_samples) %>% 
+  mutate(id = str_extract(refSequence, "[:graph:]+"))
+
+gen_refdata <- read_refdata("../kma_EFFORT/data/2019-09-09-combined_genomic_20190404.refdata") %>% 
+  mutate(custom_group = case_when(db_name == "IMGVR_20190128" ~ "Phages",
+                                  db_name == "parasite_cge_20190404" ~ "Parasites",
+                                  db_name == "fungi_20190213" ~ "Fungi",
+                                  db_name == "human_20181105" ~ "Human",
+                                  db_name == "protozoa_20190213" ~ "Protozoa",
+                                  db_name == "kvit_20190205" ~ "Viruses",
+                                  superkingdom_name == "NULL" &
+                                    db_name %in% c("MetaHitAssembly_20140701",
+                                                   "HumanMicrobiome_20140702") ~ "Other Bacteria/Archaea",
+                                  superkingdom_name == "Eukaryota" ~ "Other Eukaryotes",
+                                  T ~ superkingdom_name))
+
+bac_long <- gen_mapstats %>%
+  left_join(select(gen_refdata, id, ends_with("_name"))) %>%
+  filter(superkingdom_name == "Bacteria") %>%
+  arrange(sample_id, id)
+```
+
+```{r}
+mapped_to_gen <- gen_mapstats %>% 
+  group_by(sample_id) %>% 
+  summarise(total_mapped = sum(fragmentCount)) %>% 
+  left_join(livestock_sample_metadata) %>% 
+  mutate(mapped_pct = 100 * total_mapped / total_fragments)
+```
+
+```{r}
+mapped_to_gen %>% 
+  ggplot(aes(x = country, y = mapped_pct, fill = species)) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Country", y = "% of fragments mapped to Genomic") +
+  ggtitle("Proportion of Mapped Fragments (against Genomic DB)") +
+  guides(fill = F) +
+  theme_light() +
+  theme(panel.grid.major.x = element_blank())
+```
+
+### Genomic Sub-DB Composition
+```{r}
+db_mapping_count <- gen_mapstats %>% 
+  left_join(select(gen_refdata, id, db_name)) %>% 
+  group_by(sample_id, db_name) %>% 
+  summarise(fragments_per_db = sum(fragmentCount)) %>% 
+  ungroup() %>% 
+  complete(db_name, sample_id, fill = list(fragments_per_db = 0))
+
+unmapped_df <- db_mapping_count %>% 
+  group_by(sample_id) %>% 
+  summarise(total_mapped = sum(fragments_per_db)) %>% 
+  left_join(livestock_sample_metadata) %>% 
+  ungroup() %>% 
+  mutate(unmapped_fragments = total_fragments - total_mapped,
+         db_name = "Unmapped") %>% 
+  select(sample_id, fragments_per_db = unmapped_fragments, db_name)
+
+db_proportions_summary <- bind_rows(db_mapping_count, unmapped_df) %>% 
+  left_join(livestock_sample_metadata) %>% 
+  mutate(db_pct = 100 * fragments_per_db / total_fragments)
+
+interesting_dbs <- c("bacteria_20190205", "HumanMicrobiome_20140702", 
+                     "MetaHitAssembly_20140701", "bacteria_draft_20190205", 
+                     "plasmid_20190205")
+```
+
+```{r}
+db_proportions_summary %>% 
+  filter(db_name %in% interesting_dbs) %>% 
+  mutate(db_name = str_replace(db_name, "_\\d+", "")) %>% 
+  ggplot(aes(x = country, y = db_pct, fill = species)) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_grid(cols = vars(species), rows = vars(db_name), scales = "free", space = "free_x") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Country", y = "% of fragments mapped") +
+  ggtitle("Proportion of Mapped Fragments (against Genomic DB)") +
+  guides(fill = F) +
+  theme_light() +
+  theme(panel.grid.major.x = element_blank())
+```
+
+```{r, results='markup'}
+db_proportions_summary %>% 
+  filter(!db_name %in% interesting_dbs, db_name != "Unmapped",
+         db_pct > 1) %>% 
+  mutate(m_fragments = fragments_per_db * 1e-06) %>% 
+  mutate_if(is.numeric, round, digits = 2) %>% 
+  select(sample_id, db = db_name, species, country, m_fragments, db_pct) %>% 
+  arrange(desc(db_pct)) %>% 
+  DT::datatable(., rownames = F)
+```
+
+### Alpha Diversity (Bacteria)
+
+## ResFinder Summary
+
+```{r}
+res_mapstats <- read_multiple_mapstats("../kma_EFFORT/data/final_mapstats/ResFinder_20190213/")
+
+res_long <- res_mapstats %>% 
+  filter(sample_id %in% include_samples) %>% 
+  mutate(gene_id = str_extract(refSequence, "[:graph:]+")) %>% 
+  select(-refSequence) %>% 
+  left_join(resfinder_metadata) %>% 
+  select(sample_id, gene_id, amr_class, everything()) %>% 
+  mutate(frags_per_bp = fragmentCount / gene_length_bp) %>% 
+  mutate(pct_covered = 100 * refConsensusSum / gene_length_bp) %>% 
+  filter(pct_covered >= 20)
+```
+
+### Number of ResFinder Hits
+
+```{r}
+resfinder_mapped_prop <- res_long %>% 
+  group_by(sample_id) %>% 
+  summarise(res_mapped_fragments = sum(fragmentCount)) %>% 
+  ungroup() %>% 
+  bind_rows(data.frame(sample_id = setdiff(include_samples, res_long$sample_id),
+                       res_mapped_fragments = 0,
+                       stringsAsFactors = F)) %>%
+  left_join(livestock_sample_metadata) %>% 
+  mutate(resf_pct = 100 * res_mapped_fragments / total_fragments)
+```
+
+```{r}
+p_respct <- resfinder_mapped_prop %>% 
+  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  ggplot(aes(x = explicit_country, y = resf_pct, fill = species)) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Country", y = "% ResFinder hits") +
+  # ggtitle("ResFinder mapping proportion") +
+  guides(fill = F) +
+  theme_light(base_size = 9) +
+  theme(panel.grid.major.x = element_blank())
+
+p_respct
+```
+
+### Comparisons to First Results
+
+```{r}
+bact_hits <- db_mapping_count %>% 
+  filter(db_name %in% c("plasmid_20190205", 
+                        "bacteria_draft_20190205", 
+                        "HumanMicrobiome_20140702", 
+                        "MetaHitAssembly_20140701", 
+                        "bacteria_20190205", 
+                        "archaea_20190213")) %>% 
+  group_by(sample_id) %>% 
+  summarise(bact_fragments = sum(fragments_per_db))
+```
+
+```{r total-abundance-plot}
+res_long %>% 
+  left_join(bact_hits) %>% 
+  mutate(fully_normalised = frags_per_bp / bact_fragments) %>%
+  group_by(sample_id) %>% 
+  mutate(total_abundance = sum(fully_normalised)) %>% 
+  distinct(sample_id, total_abundance) %>% 
+  left_join(livestock_sample_metadata) %>% 
+  # filter(species %in% c("Pig", "Chicken")) %>%
+  ggplot(aes(x = country, y = total_abundance, fill = country)) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  scale_fill_manual(values = plot_colours$country) +
+  labs(x = "Country", y = "Don't call it FPKM") +
+  ggtitle("Total AMR Abundance") +
+  guides(fill = F) +
+  theme_light() +
+  theme(panel.grid.major.x = element_blank())
+```
+
+```{r total-alr-plot}
+res_long %>% 
+  left_join(bact_hits) %>% 
+  mutate(fully_normalised = frags_per_bp / bact_fragments) %>%
+  group_by(sample_id) %>% 
+  mutate(total_abundance = log2(sum(fully_normalised))) %>% 
+  distinct(sample_id, total_abundance) %>% 
+  left_join(livestock_sample_metadata) %>% 
+  # filter(species %in% c("Pig", "Chicken")) %>%
+  ggplot(aes(x = country, y = total_abundance, fill = country)) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  scale_fill_manual(values = plot_colours$country) +
+  labs(x = "Country", y = "ALR") +
+  ggtitle("Total AMR Abundance (log2-scale)") +
+  guides(fill = F) +
+  theme_light() +
+  theme(panel.grid.major.x = element_blank())
+```
+
+```{r munk-fig1b}
+p_stackedbar <- res_long %>% 
+  group_by(sample_id, munk2018_amr_group) %>% 
+  summarise(sum_fragments = sum(fragmentCount)) %>% 
+  left_join(livestock_sample_metadata) %>%
+  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  group_by(explicit_country, species) %>% 
+  mutate(n_group = dense_rank(sample_id)) %>% 
+  ggplot(., aes(x = n_group, y = sum_fragments, fill = munk2018_amr_group)) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_fill_manual(values = plot_colours$new_amr_group, guide = guide_legend(title = NULL)) +
+  labs(y = "AMR composition") +
+  facet_wrap(facets = vars(species, explicit_country), scales = "free_x", ncol = 9,
+             labeller = labeller(.multi_line = F)) +
+  theme_classic(base_size = 9) +
+  theme(panel.border = element_rect(linetype = "solid", fill = NA),
+        strip.background = element_blank(),
+        axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks = element_blank(),
+        legend.key.size = unit(0.3, "cm"),
+        panel.spacing.x = unit(0.05, "cm"),
+        panel.spacing.y = unit(0.1, "cm"),
+        legend.box.spacing = unit(0.1, "cm"),
+        legend.margin = margin(0.1, 0.1, 0.1, 0.1, "cm"))
+# theme_light(base_size = 10) +
+# theme(axis.text = element_blank(),
+#       axis.title.x = element_blank(),
+#       axis.ticks = element_blank(),
+#       panel.grid = element_blank(),
+#       legend.key.size = unit(0.3, "cm"))
+
+p_stackedbar
+```
+
+### Alpha Diversity (ResFinder)
+
+```{r}
+quick_chao1 <- function(vector_in){
+  f1 <- sum(vector_in == 1)
+  f2 <- sum(vector_in == 2)
+  sum(vector_in > 0) + ((f1 * (f1 - 1)) / (2 * (f2 + 1)))
+}
+
+quick_shannon <- function(vector_in){
+  vector_use <- vector_in[which(vector_in > 0)]
+  p <- vector_use / sum(vector_use)
+  -1 * sum(p * log(p))
+}
+
+res_alphadiv <- res_long %>% 
+  group_by(sample_id) %>% 
+  mutate(res_chao1 = quick_chao1(fragmentCount),
+         res_shannon = quick_shannon(fragmentCount)) %>% 
+  ungroup() %>% 
+  select(sample_id, res_chao1, res_shannon) %>% 
+  distinct() %>% 
+  bind_rows(data.frame(sample_id = setdiff(include_samples, res_long$sample_id),
+                       res_chao1 = 0,
+                       stringsAsFactors = F))
+```
+
+```{r}
+p_chao <- res_alphadiv %>% 
+  left_join(livestock_sample_metadata) %>% 
+  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  ggplot(aes(x = explicit_country, y = res_chao1, fill = species)) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Country", y = "Chao1 index") +
+  guides(fill = F) +
+  theme_classic(base_size = 9) +
+  theme(panel.border = element_rect(linetype = "solid", fill = NA),
+        strip.background = element_blank(),
+        axis.line = element_blank())
+# theme_light(base_size = 10) +
+# theme(panel.grid.major.x = element_blank(),
+#       panel.grid.minor.y = element_blank())
+
+p_chao
+```
+
+```{r}
+res_alphadiv %>% 
+  filter(! is.na(res_shannon)) %>% 
+  left_join(livestock_sample_metadata) %>% 
+  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  ggplot(aes(x = explicit_country, y = res_shannon, fill = species)) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Country", y = "Shannon index") +
+  guides(fill = F) +
+  theme_light(base_size = 9) +
+  theme(panel.grid.major.x = element_blank())
+
+ggsave("supp_shannon_evenness.pdf",
+       width = 17.7, height = 6, units = "cm")
+```

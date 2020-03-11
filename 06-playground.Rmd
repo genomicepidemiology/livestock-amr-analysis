@@ -1,0 +1,295 @@
+# Playground {-}
+Some code experiments that didn't make the cut are parked here.
+
+```{r species-heatmap-experiment, eval=F}
+# viz_clr_long %>% 
+#   group_by(gene_id, species) %>% 
+#   summarise_at("clr", list(mean_clr = mean, median_clr = median)) %>% 
+#   ungroup() %>% 
+#   filter(gene_id %in% species_shifts_per_gene$gene_id) %>%
+#   filter(species != "Fish") %>% 
+#   left_join(resfinder_metadata) %>% 
+#   mutate(is_header = F) %>% 
+#   bind_rows(species_plot_class_headers) %>%
+#   arrange(desc(amr_class), is_header, desc(short_gene)) %>%
+#   mutate(short_gene = fct_inorder(as_factor(short_gene)),
+#          species = fct_relevel(species, "Pig", "Veal Calf")) %>%
+#   ggplot(aes(x = species, y = short_gene, fill = median_clr)) +
+#   geom_raster() +
+#   geom_text(aes(x = species, y = short_gene, label = combined_label), 
+#             data = species_shift_df, colour = "gold", inherit.aes = F) +
+#   # facet_grid(rows = vars(amr_class), scales = "free_y", space = "free_y",
+#   #            switch = "y") +
+#   scale_y_discrete(labels = c('Beta-Lactam' = expression(bold("Beta-Lactam")), 
+#                               'Macrolide' = expression(bold(Macrolide)), 
+#                               'Tetracycline' = expression(bold(Tetracycline)), 
+#                               'Aminoglycoside' = expression(bold(Aminoglycoside)), 
+#                               'Phenicol' = expression(bold(Phenicol)), 
+#                               'Nitroimidazole' = expression(bold(Nitroimidazole)), 
+#                               'Sulphonamide' = expression(bold(Sulphonamide)), parse=TRUE)) + 
+#   # scico::scale_fill_scico(palette = "lajolla", direction = -1, end = 0.66, na.value = "white") +
+#   scico::scale_fill_scico(palette = "oslo", direction = 1, end = 0.98, na.value = "white") +
+#   # scico::scale_fill_scico(palette = "bamako", direction = 1, na.value = "white") +
+#   theme_minimal() +
+#   theme(strip.text.y = element_text(angle = 180),
+#         strip.placement = "outside",
+#         axis.title = element_blank(),
+#         legend.position = "bottom",
+#         panel.grid = element_blank())
+```
+
+```{r}
+# res_filtered_wide <- res_coda_long %>%
+#   left_join(livestock_sample_metadata) %>%
+#   filter(species != "Fish") %>%
+#   select(gene_id, sample_id, fragmentCount) %>%
+#   spread(key = "gene_id", value = "fragmentCount", fill = 0) %>%
+#   column_to_rownames("sample_id")
+# 
+# res_conds <- data.frame("sample_id" = rownames(res_filtered_wide), stringsAsFactors = F) %>% 
+#   left_join(livestock_sample_metadata) %>% 
+#   select(species, country)
+# 
+# binary_res_conds <- case_when(res_conds$species == "Pig" | res_conds$species == "Veal Calf" ~ "Mammal", 
+#                               res_conds$species == "Turkey" | res_conds$species == "Poultry" ~ "Bird",
+#                               T ~ "Fish")
+# 
+# aldex_res_clr <- aldex.clr(t(res_filtered_wide), conds = binary_res_conds, useMC = T)
+# 
+# d.eff <- aldex.effect(aldex_res_clr, binary_res_conds, include.sample.summary = F, CI = TRUE, useMC = TRUE)
+# d.tt <- aldex.ttest(aldex_res_clr)
+# x.all <- data.frame(d.tt,
+#                     d.eff) %>% 
+#   rownames_to_column("gene_id")
+# 
+# mean_aldex_res_clr <- map(aldex_res_clr@analysisData, rowMeans) %>% 
+#   data.frame(., check.names = F) %>%
+#   t
+# 
+# select_binary_genes <- x.all %>%
+#   filter(abs(effect) >= 1, overlap < 0.04)
+# 
+# mean_aldex_res_clr %>% 
+#   as.data.frame() %>% 
+#   rownames_to_column("sample_id") %>% 
+#   pivot_longer(-sample_id, names_to = "gene_id", values_to = "clr") %>% 
+#   left_join(resfinder_metadata) %>% 
+#   filter(gene_id %in% select_binary_genes$gene_id) %>%
+#   mutate(gene_id = paste(gene_id, amr_class, sep = "\n")) %>% 
+#   left_join(livestock_sample_metadata) %>% 
+#   mutate(binary_class = case_when(species == "Pig" | species == "Veal Calf" ~ "Mammal", 
+#                                   species == "Turkey" | species == "Poultry" ~ "Bird",
+#                                   T ~ "Fish")) %>% 
+#   ggplot(aes(x = binary_class, y = clr, fill = binary_class)) +
+#   geom_boxplot(outlier.shape = 21) +
+#   facet_wrap(facets = vars(gene_id), ncol = 5) +
+#   # scale_fill_manual(values = plot_colours$country) +
+#   labs(x = "Country", y = "CLR") +
+#   ggtitle("AMR genes with substantial shifts") +
+#   # guides(fill = F, alpha = F) +
+#   theme_light() +
+#   theme(panel.grid.major.x = element_blank())
+```
+
+```{r, eval=F}
+class_pairwise_results <- map(list.files("./output/country_class/", 
+                                         pattern = ".csv", 
+                                         full.names = T),
+                              read_csv2,
+                              col_types = 
+                                cols(
+                                  species = col_character(),
+                                  country1 = col_character(),
+                                  country2 = col_character(),
+                                  gene_id = col_character(),
+                                  we.ep = col_double(),
+                                  we.eBH = col_double(),
+                                  wi.ep = col_double(),
+                                  wi.eBH = col_double(),
+                                  rab.all = col_double(),
+                                  rab.win.country1 = col_double(),
+                                  rab.win.country2 = col_double(),
+                                  diff.btw = col_double(),
+                                  diff.win = col_double(),
+                                  effect = col_double(),
+                                  effect.low = col_double(),
+                                  effect.high = col_double(),
+                                  overlap = col_double()
+                                )) %>% 
+  bind_rows() %>% 
+  mutate(gene_id = str_replace(gene_id, "Glycopeptide", "Vancomycin"))
+
+class_clone <- class_pairwise_results %>% 
+  rename(countrya = country2,
+         country2 = country1,
+         country1 = country2)
+
+class_doubled <- bind_rows(class_pairwise_results, class_clone)
+
+class_shifts <- class_doubled %>%
+  mutate(shift = abs(effect) >= 1) %>% 
+  group_by(species, gene_id, country1) %>% 
+  summarise(total_diffs = sum(shift)) %>% 
+  mutate(shift_label = if_else(total_diffs > 0, total_diffs, as.integer(NA))) %>% 
+  rename(country = country1) %>% 
+  filter(species == "Pig" | species == "Poultry",
+         gene_id %in% c("Phenicol", "Vancomycin", "Quinolone"))
+
+# With mutate() instead of summarise()
+# class_shifts %>% 
+#   group_by(species, gene_id) %>% 
+#   summarise(gene_shifts = sum(shift)) %>% View()
+#   distinct(species, gene_id, country1, total_diffs) %>% View()
+
+mean_aldex_class_clr %>% 
+  as.data.frame() %>% 
+  rownames_to_column("sample_id") %>% 
+  pivot_longer(-sample_id, names_to = "gene_id", values_to = "clr") %>% 
+  left_join(livestock_sample_metadata) %>% 
+  filter(species == "Pig" | species == "Poultry",
+         gene_id %in% c("Phenicol", "Vancomycin", "Quinolone")) %>%
+  ggplot(., aes(x = country, y = clr, fill = country)) +
+  geom_boxplot(outlier.shape = 21) +
+  geom_label(aes(label = shift_label, alpha = shift_label), 
+             data = class_shifts, y = 12) +
+  ylim(-11, 13) +
+  facet_grid(rows = vars(species), cols = vars(gene_id)) +
+  scale_fill_manual(values = plot_colours$country) +
+  labs(x = "Country", y = "CLR") +
+  ggtitle("ResFinder classes") +
+  guides(fill = F, alpha = F) +
+  theme_light() +
+  theme(panel.grid.major.x = element_blank())
+```
+
+```{r perfect-squares, eval=F}
+class_clr_long %>% 
+  left_join(livestock_sample_metadata) %>%
+  group_by(country, species, amr_class) %>% 
+  mutate(n_group = dense_rank(desc(clr)),
+         x_group = (n_group - 1) %% 5,
+         y_group = -(ceiling((n_group / 5))),
+         y_lines = percent_rank(clr) + 1,
+         x_lines = 1) %>%
+  ggplot(aes(y = y_lines, x = x_lines, fill = clr)) +
+  geom_raster() + 
+  # scale_fill_gradient2() +
+  # scale_fill_distiller(palette = "RdYlBu") +
+  # scale_fill_gradient2(high = "#b2182b", low = "#2166ac", mid = "#f7f7f7") +
+  scico::scale_fill_scico(palette = "vik", direction = 1,
+                          limits = c(-1, 1) * max(abs(class_clr_long$clr))) +
+  facet_grid(rows = vars(amr_class), cols = vars(species, country), 
+             scales = "free_y",
+             # space = "free",
+             switch = "y") +
+  theme_void() +
+  theme(panel.spacing.x = unit(1.5, "pt"),
+        panel.spacing.y = unit(3, "pt"),
+        strip.text.y = element_text(angle = 180),
+        legend.position = "bottom")
+```
+
+```{r, eval=F}
+clr_class_breaks <- c(seq(min(clr_class), 0, length.out = 51), 
+                      seq(max(clr_class) / 100, max(clr_class), length.out = 50))
+
+class_heatmap_gaps <- res_long %>% 
+  distinct(sample_id) %>% 
+  left_join(livestock_sample_metadata) %>% 
+  group_by(species, country) %>% 
+  summarise(cohort_samples = n()) %>% 
+  ungroup() %>% 
+  mutate(cohort_gaps = cumsum(cohort_samples)) %>% 
+  group_by(species) %>% 
+  mutate(species_gaps = max(cohort_gaps))
+```
+
+```{r pheatmap-play1, eval=F}
+pheatmap(clr_class,
+         breaks = clr_class_breaks,
+         annotation_row = select(heatmap_sample_metadata, country, species),
+         annotation_colors = list(species = plot_colours$species,
+                                  country = plot_colours$country),
+         # clustering_distance_rows = "euclidean",
+         # cutree_rows = 2,
+         angle_col = 90,
+         gaps_row = unique(class_heatmap_gaps$species_gaps),
+         gaps_col = seq_len(ncol(clr_class)),
+         cluster_cols = F,
+         cluster_rows = F,
+         show_rownames = F)
+```
+
+```{r pheatmap-play2, eval=F}
+pheatmap(t(clr_class),
+         breaks = clr_class_breaks,
+         annotation_col = select(heatmap_sample_metadata, country, species),
+         annotation_colors = list(species = plot_colours$species,
+                                  country = plot_colours$country),
+         # clustering_distance_rows = "euclidean",
+         # cutree_rows = 2,
+         # angle_col = 90,
+         gaps_col = unique(class_heatmap_gaps$cohort_gaps),
+         gaps_row = seq_len(ncol(clr_class)),
+         cluster_cols = F,
+         cluster_rows = F,
+         show_colnames = F)
+```
+
+```{r stackedbars-play, eval=F}
+res_long %>% 
+  group_by(sample_id, new_amr_group) %>% 
+  summarise(sum_fragments = sum(frags_per_bp)) %>% 
+  left_join(livestock_sample_metadata,) %>% 
+  group_by(country, species) %>% 
+  mutate(n_group = dense_rank(sample_id)) %>% 
+  # filter(species %in% c("Pig", "Poultry")) %>% 
+  ggplot(., aes(x = n_group, y = sum_fragments, fill = new_amr_group)) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_fill_manual(values = plot_colours$new_amr_group, guide = guide_legend(title = NULL)) +
+  ylab("Relative abundance") +
+  xlab("Samples") +
+  facet_grid(rows = vars(species), cols = vars(country), scales = "free_x", space = "free_x") +
+  theme_classic() +
+  theme(panel.border = element_rect(linetype = "solid", fill = NA),
+        strip.background = element_blank(),
+        axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks = element_blank())
+```
+
+Philipp's original code:
+```{r, eval=F}
+meta.poultry <- filter(livestock_sample_metadata, species == "Poultry") %>% 
+  select(sample = sample_id, country = explicit_country)
+countries <- unique(meta.poultry$country)
+
+pairwise <- combinations(n = 9,r = 2, v = countries, repeats.allowed = F) %>% 
+  as.data.frame
+
+colnames(pairwise) <- c("countryA","countryB")
+
+aldax.pair <- function(country.one, country.two, counts, meta) { 
+  conditions <- filter(meta, country == country.one | country == country.two)
+  conditions$country <- ifelse(conditions$country == country.one, "A", "B")
+  counts <- counts[conditions$sample, ]
+  counts <- counts[ , colSums(counts) > 0]
+  
+  d.x <- aldex.clr(t(counts), conds = conditions$country, denom = "all", useMC = F)
+  d.eff <- aldex.effect(d.x, conditions$country, include.sample.summary = F, CI = TRUE, useMC = TRUE)
+  d.tt <- aldex.ttest(d.x)
+  x.all <- data.frame(gene_id = rownames(d.tt), 
+                      countryA = country.one, 
+                      countryB = country.two,
+                      d.tt, d.eff)
+  write.csv2(x.all, paste0("./output/pairwise_res/poultry-", country.one, "-", country.two, ".csv"), row.names = F)
+  #   pdf(here("effort",strc("pairwise",country.one,country.two,"_poultry_aldex.pdf")))
+  # aldex.plot(x.all)
+  # dev.off()
+  return(TRUE)
+}
+
+poultry_compare_countries <- map2_lgl(pairwise$countryA, pairwise$countryB,
+                                      aldax.pair, res_wide, meta.poultry)
+```

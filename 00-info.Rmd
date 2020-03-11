@@ -1,0 +1,37 @@
+# Data Sources {-}
+
+* European Nucleotide Archive:
+  + Raw FASTQ data
+* File Hosting TBD:
+  + CatMapstat files
+  + Full Genomic Metadata
+* R data package:
+  + Count matrices
+  + Sample Metadata
+  + Abridged Genomic Metadata (class level)
+  + ResFinder Metadata
+
+# R Packages {-}
+You will need to load the following packages at some point during the analysis,
+so best go ahead and install them.
+```{r load-all-pkgs, message=FALSE}
+library(RoederLivestockAMR)
+library(tidyverse)
+library(ALDEx2)
+library(mapstatHelpers)
+library(pheatmap)
+library(cowplot)
+library(ggrepel)
+library(viridisLite)
+
+include_samples <- livestock_sample_metadata %>% 
+  group_by(species, country, farm_id) %>% 
+  mutate(fragment_rank = min_rank(desc(total_fragments))) %>% 
+  filter(fragment_rank == 1) %>% 
+  .$sample_id
+```
+
+```{r print-sessionInf}
+# devtools::session_info()
+```
+

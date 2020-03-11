@@ -1,0 +1,187 @@
+# Supplements
+
+```{r}
+supp_mappingstats <- plot_grid(p_readnos, p_respct, p_bacpct,
+                               labels = "auto",
+                               align = "v", ncol = 1)
+
+ggsave("supp_mapstats.pdf", plot = supp_mappingstats, 
+       width = 17.7, height = 15, units = "cm")
+```
+
+```{r}
+core_res_country <- res_coda_long %>% 
+  left_join(livestock_sample_metadata) %>%
+  filter(species != "Fish") %>% 
+  group_by(gene_id, species, explicit_country) %>% 
+  summarise(herds_with_gene = n()) %>% 
+  ungroup() %>% 
+  filter(herds_with_gene >= 18) %>% 
+  mutate(keep_gene = T)
+
+p_suppcorecountry <- core_res_country %>% 
+  left_join(resfinder_metadata) %>%
+  group_by(species, explicit_country, munk2018_amr_group) %>% 
+  summarise(core_genes = n()) %>% 
+  ggplot(aes(x = explicit_country, y = core_genes, fill = munk2018_amr_group)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Country", y = "Number of core AMR genes") +
+  scale_fill_manual(values = plot_colours$new_amr_group, guide = guide_legend(title = NULL)) +
+  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  theme_light(base_size = 9)
+```
+
+```{r}
+core_res_country %>% 
+  group_by(gene_id, species) %>% 
+  mutate(n_present = n()) %>% 
+  ungroup() %>% 
+  mutate(prop_present = 
+           case_when(species %in% c("Chicken", "Pig") ~ n_present / 9,
+                     species %in% c("Veal Calf", "Turkey") ~ n_present / 3,
+                     T ~ 4.2),
+         bin_present = 
+           case_when(n_present == 1 ~ "one",
+                     prop_present == 1 ~ "all",
+                     prop_present < 0.5 ~ "less than half",
+                     prop_present >= 0.5 ~ "more than half",
+                     T ~ "AAAAAAAAAA")) %>% 
+  complete(gene_id, nesting(species, explicit_country)
+           , fill = list(bin_present = "zero")
+  ) %>%
+  left_join(resfinder_metadata) %>%
+  arrange(desc(short_gene)) %>% 
+  mutate(short_gene = fct_inorder(as_factor(short_gene)),
+         bin_present = fct_relevel(as_factor(bin_present), 
+                                   "zero",
+                                   "one", "less than half", "more than half", "all")) %>% 
+  ggplot(aes(x = explicit_country, y = short_gene, fill = bin_present)) +
+  geom_tile() +
+  scale_fill_brewer(palette = "Reds", na.value = "white") +
+  labs(x = "Country", y = "AMR gene", fill = "Part of core resistome in how many countries (within one host species)?") +
+  facet_grid(cols = vars(species),
+             rows = vars(munk2018_amr_group), 
+             scales = "free", space = "free") +
+  theme_light(base_size = 7.5) +
+  theme(panel.grid.major.x = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        legend.key.size = unit(0.3, "cm"),
+        legend.position = "bottom")
+
+scale_core_country <- 1.7
+ggsave("supp_core_countries.pdf", width = 17.7 * scale_core_country, 
+       height = 22 * scale_core_country, units = "cm")
+```
+
+```{r}
+core_res_species <- res_coda_long %>% 
+  left_join(livestock_sample_metadata) %>%
+  filter(species != "Fish") %>% 
+  group_by(gene_id, species) %>% 
+  summarise(herds_with_gene = n()) %>% 
+  ungroup() %>% 
+  mutate(keep_gene = 
+           case_when(species %in% c("Chicken", "Pig") & herds_with_gene >= 162 ~ T,
+                     species %in% c("Veal Calf", "Turkey") & herds_with_gene >= 54 ~ T,
+                     T ~ F)) %>% 
+  filter(keep_gene)
+
+p_suppcorespecies <- core_res_species %>%
+  left_join(resfinder_metadata) %>% 
+  group_by(species, munk2018_amr_group) %>% 
+  summarise(core_genes = n()) %>% 
+  ggplot(aes(x = species, y = core_genes, fill = munk2018_amr_group)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Species", y = "Number of core AMR genes") +
+  scale_fill_manual(values = plot_colours$new_amr_group, guide = guide_legend(title = NULL)) +
+  # facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  theme_light(base_size = 9) +
+  theme(legend.position = "none")
+```
+
+```{r}
+core_res_species %>% 
+  group_by(gene_id) %>% 
+  mutate(n_present = n()) %>% 
+  ungroup() %>% 
+  complete(gene_id, species, fill = list(n_present = 0)) %>%
+  left_join(resfinder_metadata) %>%
+  arrange(desc(short_gene)) %>% 
+  mutate(short_gene = fct_inorder(as_factor(short_gene))) %>% 
+  ggplot(aes(x = species, y = short_gene, fill = n_present)) +
+  geom_tile() +
+  labs(x = "Species", y = "AMR gene", fill = "Part of core resistome in how many host species?") +
+  facet_grid(rows = vars(munk2018_amr_group), scales = "free", space = "free") +
+  scale_fill_distiller(palette = "Reds", direction = 1, guide = "legend",
+                       na.value = "white") +
+  # scale_fill_manual(values = c("white", "#fb8072")) +
+  theme_light(base_size = 7.5) +
+  theme(panel.grid.major.x = element_blank(),
+        legend.position = "bottom",
+        legend.key.size = unit(0.3, "cm"),
+        strip.text.y = element_text(angle = 0))
+
+ggsave("supp_core_species.pdf", width = 17.7, height = 22, units = "cm")
+```
+
+```{r}
+core_legend <- get_legend(p_suppcorecountry)
+
+core_bottomrow <- plot_grid(p_suppcorespecies, core_legend,
+                            nrow = 1, rel_widths = c(1, 0.3))
+
+combine_core_barcharts <- plot_grid(p_suppcorecountry + theme(legend.position = "none"),
+                                    core_bottomrow,
+                                    ncol = 1,
+                                    labels = c("a", "b", NULL))
+
+ggsave("supp_core_bars.pdf", plot = combine_core_barcharts, 
+       width = 17.7, height = 15, units = "cm")
+```
+
+```{r}
+res_group_alphadiv <- res_long %>% 
+  left_join(select(livestock_sample_metadata, sample_id, species)) %>% 
+  filter(species != "Fish") %>% 
+  group_by(sample_id, new_amr_group) %>% 
+  summarise(chao1 = quick_chao1(fragmentCount)) %>% 
+  ungroup() %>% 
+  complete(sample_id, new_amr_group, fill = list(chao1 = 0))
+
+res_group_alphadiv %>% 
+  left_join(livestock_sample_metadata) %>% 
+  ggplot(aes(x = explicit_country, y = chao1, fill = species))+
+  geom_boxplot() + 
+  facet_grid(cols = vars(species), rows = vars(new_amr_group),
+             scales = "free_x", space = "free")
+```
+
+```{r}
+genus_long <- bac_long %>% 
+  group_by(sample_id, genus_name) %>% 
+  summarise(genus_frags = sum(fragmentCount)) %>% 
+  ungroup()
+
+genus_alphadiv <- genus_long %>% 
+  group_by(sample_id) %>% 
+  summarise(chao1 = quick_chao1(genus_frags),
+            shannon = quick_shannon(genus_frags)) %>% 
+  ungroup()
+```
+
+```{r}
+genus_alphadiv %>% 
+  left_join(livestock_sample_metadata) %>% 
+  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  ggplot(aes(x = explicit_country, y = chao1, fill = species)) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Country", y = "Chao1 index") +
+  guides(fill = F) +
+  theme_classic(base_size = 9) +
+  theme(panel.border = element_rect(linetype = "solid", fill = NA),
+        strip.background = element_blank(),
+        axis.line = element_blank())
+```
+

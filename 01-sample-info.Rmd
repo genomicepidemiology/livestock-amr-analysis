@@ -1,0 +1,78 @@
+# Sample Information
+To start things off, we look at some features of the 
+metagenomic samples and the sequencing process.
+
+## Number of Herds {#n-herds}
+Metadata about the samples and the FASTQ files is packed into the R package `RoederLivestockAMR`,
+so we will load that package and take it from there.
+We will also need functionality from the `tidyverse` suite of packages.
+```{r pkgs-part1, eval=FALSE}
+library(RoederLivestockAMR)
+library(tidyverse)
+```
+
+First off, we want to aggregate the number of herds sampled in each cohort.
+Metadata corresponding to the metagenomic samples is contained in the data frame
+`livestock_sample_metadata`.
+```{r tease-metadata}
+head(livestock_sample_metadata)
+```
+
+As you can maybe guess from the column names above, there are a few 
+samples that are biological replicates (same herd sampled repeatedly).
+
+Consequently, we cannot just aggregate the table by country and species and
+call it a day.
+Instead, we make use of a few `tidyverse` functions before aggregating in order to identify unique herds:
+unique herds can be identified through the three attributes animal species, 
+country of origin and farm ID within the country.
+```{r count-herds}
+count_herds <- livestock_sample_metadata %>% 
+  select(species, country, farm_id) %>% 
+  distinct() %>% 
+  group_by(species, country) %>% 
+  summarise(n_herds = n()) %>% 
+  ungroup() %>% 
+  spread(., key = "country", value = "n_herds", fill = 0) %>% 
+  mutate(total = rowSums(.[-1]))
+```
+
+The above code generates a data frame that contains the information
+we want.
+If you are running this code interactively on your computer, you can just go 
+ahead and inspect the resulting object `count_herds`.
+
+For this documentation, we use `knitr::kable(count_herds)` to present the table in a fancy 
+manner:
+
+```{r print-herdcount, tidy=FALSE, echo=FALSE}
+knitr::kable(
+  rename(count_herds, Species = species, Total = total), 
+  caption = 'Number of livestock herds sampled in each country',
+  booktabs = TRUE
+)
+```
+
+## Number of Sequenced Reads {#n-reads}
+Another quantity that we might be interested in is the number of reads sequenced
+for each sample.
+This information is also contained in the `livestock_sample_metadata` data frame.
+
+Let's have a look at the distributions of read counts per sample in each cohort (country and species):
+```{r plot-readno}
+p_readnos <- livestock_sample_metadata %>% 
+  filter(sample_id %in% include_samples) %>% 
+  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  ggplot(aes(x = explicit_country, y = total_fragments * 1e-06, fill = species)) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Country", y = "Millions of read pairs") +
+  # ggtitle("Number of Sequenced Reads") +
+  guides(fill = F) +
+  theme_light(base_size = 9) +
+  theme(panel.grid.major.x = element_blank())
+
+p_readnos
+```
+

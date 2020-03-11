@@ -1,0 +1,30 @@
+--- 
+title: "Analysis Code for Livestock AMR Study"
+author: "Timo Röder"
+date: "`r Sys.Date()`"
+site: bookdown::bookdown_site
+output: 
+  bookdown::gitbook:
+    split_by: chapter
+    self_contained: no
+documentclass: book
+description: "Code for Livestock AMR Study"
+---
+
+# Overview {-}
+This website presents the R code used in the study **`r RoederLivestockAMR::study_info$title`** (Röder *et al.*, [Link](`r RoederLivestockAMR::study_info$url`)).
+
+I tried to create a thorough documentation of the R code used
+in the study and welcome you to have a look at the whole process.
+
+That being said, if you are just looking for the code behind certain figures or tables,
+here is where to find them:
+
+* Figures
+  + Figure 1
+  + [Supplementary Figure S-A](#n-reads)
+* Tables
+  + [Table A](#n-herds)
+  + Supplementary Table S-A
+
+<!-- [Here](#intro) or \@ref(intro) for links-->

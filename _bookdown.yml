@@ -1,0 +1,6 @@
+book_filename: "livestock-amr-analysis"
+language:
+  ui:
+    chapter_name: "Part "
+delete_merged_file: true
+output_dir: "docs"
