@@ -2,9 +2,9 @@
 
 * European Nucleotide Archive:
   + Raw FASTQ data
-* File Hosting TBD:
+* Zenodo:
   + CatMapstat files
-  + Full Genomic Metadata
+* File Hosting TBD:
 * R data package:
   + Count matrices
   + Sample Metadata
@@ -15,9 +15,8 @@
 You will need to load the following packages at some point during the analysis,
 so best go ahead and install them.
 ```{r load-all-pkgs, message=FALSE}
-library(RoederLivestockAMR)
-library(tidyverse)
 library(ALDEx2)
+library(tidyverse)
 library(mapstatHelpers)
 library(pheatmap)
 library(cowplot)
@@ -30,6 +29,32 @@ include_samples <- livestock_sample_metadata %>%
   filter(fragment_rank == 1) %>% 
   .$sample_id
 ```
+# Plot colors
+Let us define some colors that we can use throughout plots
+```{r plot-colors}
+plot_colors = list(explicit_country = c(BE="#E41A1C", BG="#377EB8", DE="#4DAF4A", 
+                                        DK="#984EA3",ES="#FF7F00", FR="#FFFF33", 
+                                        IT="#A65628", NL="#F781BF", PL="#999999"),
+                   country = c(A="#E41A1C", B="#4DAF4A", C="#984EA3", 
+                               D="#A65628", E="#FFFF33", F="#F781BF", 
+                               G="#999999", H="#FF7F00", I="#377EB8"),
+                   species = c(Fish="#386cb0", Pig = "#beaed4", Broiler="#fdc086", 
+                               Turkey="#ffff99", "Veal Calf"="#7fc97f"),
+                   nofish = c(Pig="#beaed4", Broiler="#fdc086", Turkey="#ffff99", "Veal Calf"="#7fc97f"))
+```
+
+# Loading metadata
+The metadata on the investigated samples is available in flat tab-separated files.
+The same is the case for the ResFinder resistance genes. So let us load them.
+
+```{r load-metadata, , message=FALSE}
+# Load sample metadata
+livestock_sample_metadata = read_tsv("study_metadata/livestock_sample_metadata.txt")
+
+# Load ResFinder metadata
+resfinder_metadata = read_tsv("study_metadata/resfinder_metadata.txt")
+```
+
 
 ```{r print-sessionInf}
 # devtools::session_info()
