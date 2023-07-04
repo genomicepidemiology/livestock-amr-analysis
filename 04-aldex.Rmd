@@ -152,7 +152,8 @@ species_pairwise_results <- map(list.files("./output/species_iqlr/",
                                     overlap = col_double()
                                   )) %>% 
   bind_rows() %>% 
-  mutate_at(vars(starts_with("species")), function(x) if_else(x == "Poultry", "Chicken", x)) %>% 
+  #mutate_at(vars(starts_with("species")), function(x) if_else(x == "Poultry", "Chicken", x)) %>% 
+  mutate_at(vars(starts_with("species")), function(x) if_else(x == "Poultry", "Broiler", x)) %>% 
   mutate(which_table = "original")
 
 species_reversed <- species_pairwise_results %>% 
@@ -168,7 +169,8 @@ species_doubled <- bind_rows(species_pairwise_results, species_reversed) %>%
   mutate_at(c("species1", "species2"), 
             list(class = function(x) {
               case_when(x == "Pig" | x == "Veal Calf" ~ 1,
-                        x == "Chicken" | x == "Turkey" ~ 2,
+                        #x == "Chicken" | x == "Turkey" ~ 2,
+                        x == "Broiler" | x == "Turkey" ~ 2,
                         x == "Fish" ~ 4,
                         T ~ 99)})) %>% 
   mutate(shift = abs(effect) > 1 & overlap < 0.05,
@@ -287,7 +289,8 @@ viz_clr_long %>%
   facet_wrap(vars(amr_class, short_gene), ncol = 7, 
              labeller = labeller(.multi_line = F)) +
   scale_fill_manual(values = plot_colours$species) +
-  scale_x_discrete(limits = c("Chicken", "Turkey", "Pig", "Veal Calf")) +
+  #scale_x_discrete(limits = c("Chicken", "Turkey", "Pig", "Veal Calf")) +
+  scale_x_discrete(limits = c("Broiler", "Turkey", "Pig", "Veal Calf")) +
   labs(x = "Species", y = "CLR") +
   guides(fill = F, alpha = F) +
   ylim(-8, 21) +
@@ -329,6 +332,7 @@ country_pairwise_results <- map(list.files("./output/country_iqlr/",
                                   )) %>% 
   bind_rows() %>% 
   # mutate(species = if_else(species == "Poultry", "Chicken", species)) %>% 
+  mutate(species = if_else(species == "Poultry", "Broiler", species)) %>% 
   mutate(which_table = "original")
 
 country_reversed <- country_pairwise_results %>% 
@@ -354,7 +358,8 @@ country_shifts_per_gene <- country_doubled %>%
   group_by(species, gene_id) %>% 
   summarise(per_gene_total = n()) %>% 
   ungroup() %>% 
-  mutate(keep_gene = case_when(species %in% c("Pig", "Chicken") ~ T,
+  #mutate(keep_gene = case_when(species %in% c("Pig", "Chicken") ~ T,
+  mutate(keep_gene = case_when(species %in% c("Pig", "Broiler") ~ T,
                                species %in% c("Veal Calf", "Turkey") ~ T,
                                T ~ F)) %>% 
   filter(keep_gene) %>%
@@ -381,8 +386,10 @@ country_shift_df <- country_doubled %>%
          combined_label = if_else(is.na(pos_label) & is.na(neg_label), 
                                   as.character(NA),
                                   str_replace_all(paste0(pos_label, neg_label), "NA", "")),
-         keep_gene = case_when(species %in% c("Pig", "Chicken") & max_pos > 2 ~ T,
-                               species %in% c("Pig", "Chicken") & max_neg > 2 ~ T,
+         #keep_gene = case_when(species %in% c("Pig", "Chicken") & max_pos > 2 ~ T,
+                               #species %in% c("Pig", "Chicken") & max_neg > 2 ~ T,
+         keep_gene = case_when(species %in% c("Pig", "Broiler") & max_pos > 2 ~ T,
+                               species %in% c("Pig", "Broiler") & max_neg > 2 ~ T,
                                species %in% c("Veal Calf", "Turkey") & max_neg > 0 ~ T,
                                species %in% c("Veal Calf", "Turkey") & max_pos > 0 ~ T,
                                T ~ F)) %>% 
@@ -457,7 +464,8 @@ ggsave("fig_country_diffs.pdf", width = 17.7, height = 21, units = "cm", device 
 viz_clr_long %>% 
   left_join(select(country_shifts_per_gene, species, gene_id, keep_gene)) %>% 
   left_join(select(country_shift_df, species, country, gene_id, pos_label, neg_label)) %>% 
-  filter(keep_gene, species == "Chicken") %>% 
+  #filter(keep_gene, species == "Chicken") %>% 
+  filter(keep_gene, species == "Broiler") %>% 
   ggplot(., aes(x = explicit_country, y = clr, fill = explicit_country)) +
   geom_label(aes(label = pos_label), y = 19, label.padding = unit(0.05, "cm"), 
              # label.r = unit(0, "cm"),
@@ -477,7 +485,7 @@ viz_clr_long %>%
         axis.title.x = element_blank())
 
 scale_chicken <- 1.3
-ggsave("supp_chicken_country.pdf", 
+ggsave("supp_broiler_country.pdf", 
        width = 17.7 * scale_chicken, 
        height = 20 * scale_chicken, 
        units = "cm", device = cairo_pdf,

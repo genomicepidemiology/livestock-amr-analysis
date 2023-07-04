@@ -5,7 +5,7 @@
 ```{r}
 minimal_values <- resfinder_mapped_prop %>% 
   left_join(res_alphadiv) %>% 
-  filter(species %in% c("Pig", "Chicken")) %>% 
+  filter(species %in% c("Pig", "Broiler")) %>% 
   select(res_mapped_fragments, resf_pct, res_chao1) %>% 
   map_df(min) %>% 
   t %>% 
@@ -37,8 +37,8 @@ p_fishqc <- judge_fish %>%
 
 p_fishqc
 
-ggsave("supp_fishqc.pdf", plot = p_fishqc, 
-       width = 17.7, height = 12, units = "cm")
+#ggsave("supp_fishqc.pdf", plot = p_fishqc, 
+#       width = 17.7, height = 12, units = "cm")
 ```
 
 ```{r}
@@ -53,7 +53,7 @@ livestock_sample_metadata %>%
   filter(species == "Fish",
          sample_id %in% include_samples,
          ! sample_id %in% bad_fish) %>% 
-  count(country)
+  count(explicit_country)
 ```
 
 ```{r}
@@ -89,8 +89,6 @@ zerocorr_taxa_wide <- zCompositions::cmultRepl(taxa_wide, method = "SQ")
 
 taxa_clr <- t(apply(zerocorr_taxa_wide, 1, function(x){log2(x) - mean(log2(x))}))
 
-# taxa_dist <- dist(taxa_clr)
-
 aldex_taxa_clr <- aldex.clr(t(taxa_wide), useMC = T)
 
 mean_aldex_taxa_clr <- map(aldex_taxa_clr@analysisData, rowMeans) %>% 
@@ -112,7 +110,6 @@ mapped_to_bact <- taxa_proportions_summary %>%
 
 p_bacpct <- mapped_to_bact %>% 
   left_join(livestock_sample_metadata) %>% 
-  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
   ggplot(aes(x = explicit_country, y = total_bact_prop, fill = species)) +
   geom_boxplot(outlier.shape = 21) +
   facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
@@ -175,6 +172,9 @@ res_wide <- res_coda_long %>%
   select(gene_id, sample_id, fragmentCount) %>% 
   spread(key = "gene_id", value = "fragmentCount", fill = 0) %>%
   column_to_rownames("sample_id")
+
+# Export 
+#res_wide %>% as_tibble(rownames = "sample") %>% write_tsv("output/resgene_counts.tsv")
 ```
 
 ```{r}
@@ -275,7 +275,8 @@ p_pca <- aldex_res_pca$x %>%
   data.frame() %>% 
   rownames_to_column() %>% 
   left_join(livestock_sample_metadata, by = c("rowname" = "sample_id")) %>% 
-  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  #mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  mutate(species = factor(species, levels = c("Broiler", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
   ggplot(., aes(x = PC1, y = PC2, fill = species)) +
   stat_ellipse(geom = "polygon", alpha = 0.66) +
   geom_hline(yintercept = 0, linetype = "dashed") +
@@ -346,15 +347,31 @@ p_genes
 ```{r}
 # pca_legend <- get_legend(p_pca)
 
-whole_shebang <- plot_grid(p_chao, 
+whole_shebang <- plot_grid(#p_chao, 
                            p_stackedbar, 
                            plot_grid(p_pca, p_genes, nrow = 1, labels = c("c", "d")),
                            # pca_legend,
                            # axis = "lr", align = "v",
                            ncol = 1, rel_heights = c(0.5, 1, 0.6), labels = c("a", "b", NULL, NULL))
 
-ggsave("fig_summary.pdf", plot = whole_shebang, width = 17.7, height = 17.7, units = "cm", device = cairo_pdf,
-       family = "Arial")
+#ggsave("fig_summary.pdf", plot = whole_shebang, 
+#width = 17.7, height = 17.7, units = "cm", 
+#device = cairo_pdf, family = "Arial")
+```
+## Alternative figure 1 with abundance instead of chao1
+```{r}
+# pca_legend <- get_legend(p_pca)
+
+fig1_overview <- plot_grid(p_totalALRbox, 
+                           p_stackedbar, 
+                           plot_grid(p_pca, p_genes, nrow = 1, labels = c("c", "d")),
+                           # pca_legend,
+                           # axis = "lr", align = "v",
+                           ncol = 1, rel_heights = c(0.5, 1, 0.6), labels = c("a", "b", NULL, NULL))
+
+ggsave("output/figs/fig1_overview.pdf", plot = fig1_overview, width = 17.7, 
+       height = 17.7, units = "cm", 
+       device = cairo_pdf, family = "Arial")
 ```
 
 ```{r}

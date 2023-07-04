@@ -172,7 +172,6 @@ genus_alphadiv <- genus_long %>%
 ```{r}
 genus_alphadiv %>% 
   left_join(livestock_sample_metadata) %>% 
-  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
   ggplot(aes(x = explicit_country, y = chao1, fill = species)) +
   geom_boxplot(outlier.shape = 21) +
   facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
@@ -183,5 +182,44 @@ genus_alphadiv %>%
   theme(panel.border = element_rect(linetype = "solid", fill = NA),
         strip.background = element_blank(),
         axis.line = element_blank())
+```
+
+```{r}
+# Include the following objects in an Excel overview file
+namesOfTbls = c("livestock_sample_metadata",
+                "resfinder_metadata",
+                "res_group_alphadiv",
+                "genus_alphadiv",
+                "mapped_to_gen",
+                "bact_hits",
+                "taxa_mapping_count",
+                "taxa_proportions_summary",
+                "db_mapping_count",
+                "res_mapstats",
+                "res_long",
+                "res_coda_long",
+                "taxa_wide",
+                "res_wide",
+                "res_filtered_wide",
+                "bac_alphadiv",
+                "res_alphadiv",
+                "clr_vars",
+                "core_res_country")
+
+# Function for writing multi-page Excel based on names of tables
+MakeSpreadSheetsFunc = function(output_filename, tbl_names) {
+  workbook = openxlsx::createWorkbook()
+  for (i in 1:length(tbl_names)) {
+    sheet_i = eval(sym(tbl_names[i]))
+    openxlsx::addWorksheet(wb = workbook,
+                           sheetName = tbl_names[i])
+    openxlsx::writeData(wb = workbook, 
+                        sheet = i, 
+                        x = sheet_i)
+  }
+  openxlsx::saveWorkbook(workbook, file = output_filename)
+}
+
+MakeSpreadSheetsFunc("output/effort_suppl_tbls.xlsx", namesOfTbls)
 ```
 

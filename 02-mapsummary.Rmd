@@ -7,9 +7,11 @@
 library(mapstatHelpers)
 ```
 
+Import the data on assigned reads.
+This can take a while as quite a few files need to be read
 ```{r big-import}
 gen_mapstats <- 
-  read_multiple_mapstats("../kma_EFFORT/data/final_mapstats/genomic_20190404/") %>% 
+  read_multiple_mapstats("../kma_EFFORT/data/final_mapstats/livestockAMR_Genomic_mapstats/") %>% 
   filter(sample_id %in% include_samples) %>% 
   mutate(id = str_extract(refSequence, "[:graph:]+"))
 
@@ -31,7 +33,7 @@ bac_long <- gen_mapstats %>%
   filter(superkingdom_name == "Bacteria") %>%
   arrange(sample_id, id)
 ```
-
+Let us take a look at how many of the reads were mapped to the known genomes
 ```{r}
 mapped_to_gen <- gen_mapstats %>% 
   group_by(sample_id) %>% 
@@ -84,7 +86,7 @@ interesting_dbs <- c("bacteria_20190205", "HumanMicrobiome_20140702",
 db_proportions_summary %>% 
   filter(db_name %in% interesting_dbs) %>% 
   mutate(db_name = str_replace(db_name, "_\\d+", "")) %>% 
-  ggplot(aes(x = country, y = db_pct, fill = species)) +
+  ggplot(aes(x = explicit_country, y = db_pct, fill = species)) +
   geom_boxplot(outlier.shape = 21) +
   facet_grid(cols = vars(species), rows = vars(db_name), scales = "free", space = "free_x") +
   scale_fill_manual(values = plot_colours$species) +
@@ -101,12 +103,11 @@ db_proportions_summary %>%
          db_pct > 1) %>% 
   mutate(m_fragments = fragments_per_db * 1e-06) %>% 
   mutate_if(is.numeric, round, digits = 2) %>% 
-  select(sample_id, db = db_name, species, country, m_fragments, db_pct) %>% 
+  select(sample_id, db = db_name, species, explicit_country, m_fragments, db_pct) %>% 
   arrange(desc(db_pct)) %>% 
   DT::datatable(., rownames = F)
 ```
 
-### Alpha Diversity (Bacteria)
 
 ## ResFinder Summary
 
@@ -139,8 +140,7 @@ resfinder_mapped_prop <- res_long %>%
 ```
 
 ```{r}
-p_respct <- resfinder_mapped_prop %>% 
-  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+p_respct <- resfinder_mapped_prop %>%
   ggplot(aes(x = explicit_country, y = resf_pct, fill = species)) +
   geom_boxplot(outlier.shape = 21) +
   facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
@@ -176,12 +176,12 @@ res_long %>%
   mutate(total_abundance = sum(fully_normalised)) %>% 
   distinct(sample_id, total_abundance) %>% 
   left_join(livestock_sample_metadata) %>% 
-  # filter(species %in% c("Pig", "Chicken")) %>%
-  ggplot(aes(x = country, y = total_abundance, fill = country)) +
+  filter(species %in% c("Pig", "Broiler")) %>%
+  ggplot(aes(x = explicit_country, y = total_abundance, fill = country)) +
   geom_boxplot(outlier.shape = 21) +
-  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  facet_wrap(. ~ species, scales = "free", nrow = 1) +
   scale_fill_manual(values = plot_colours$country) +
-  labs(x = "Country", y = "Don't call it FPKM") +
+  labs(x = "Country", y = "AMR load - exp(ALR)") +
   ggtitle("Total AMR Abundance") +
   guides(fill = F) +
   theme_light() +
@@ -189,31 +189,32 @@ res_long %>%
 ```
 
 ```{r total-alr-plot}
-res_long %>% 
+p_totalALRbox <- res_long %>% 
   left_join(bact_hits) %>% 
   mutate(fully_normalised = frags_per_bp / bact_fragments) %>%
   group_by(sample_id) %>% 
   mutate(total_abundance = log2(sum(fully_normalised))) %>% 
   distinct(sample_id, total_abundance) %>% 
-  left_join(livestock_sample_metadata) %>% 
-  # filter(species %in% c("Pig", "Chicken")) %>%
-  ggplot(aes(x = country, y = total_abundance, fill = country)) +
+  left_join(livestock_sample_metadata) %>%
+  ggplot(aes(x = explicit_country, y = total_abundance, fill = species)) +
   geom_boxplot(outlier.shape = 21) +
   facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
-  scale_fill_manual(values = plot_colours$country) +
-  labs(x = "Country", y = "ALR") +
-  ggtitle("Total AMR Abundance (log2-scale)") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Country", y = "ALR (log2)") +
   guides(fill = F) +
-  theme_light() +
-  theme(panel.grid.major.x = element_blank())
+  theme_classic(base_size = 9) +
+  theme(panel.border = element_rect(linetype = "solid", fill = NA),
+        strip.background = element_blank(),
+        axis.line = element_blank())
+
+p_totalALRbox
 ```
 
-```{r munk-fig1b}
+```{r munk2018-fig1b}
 p_stackedbar <- res_long %>% 
   group_by(sample_id, munk2018_amr_group) %>% 
   summarise(sum_fragments = sum(fragmentCount)) %>% 
   left_join(livestock_sample_metadata) %>%
-  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
   group_by(explicit_country, species) %>% 
   mutate(n_group = dense_rank(sample_id)) %>% 
   ggplot(., aes(x = n_group, y = sum_fragments, fill = munk2018_amr_group)) +
@@ -234,12 +235,6 @@ p_stackedbar <- res_long %>%
         panel.spacing.y = unit(0.1, "cm"),
         legend.box.spacing = unit(0.1, "cm"),
         legend.margin = margin(0.1, 0.1, 0.1, 0.1, "cm"))
-# theme_light(base_size = 10) +
-# theme(axis.text = element_blank(),
-#       axis.title.x = element_blank(),
-#       axis.ticks = element_blank(),
-#       panel.grid = element_blank(),
-#       legend.key.size = unit(0.3, "cm"))
 
 p_stackedbar
 ```
@@ -274,12 +269,13 @@ res_alphadiv <- res_long %>%
 ```{r}
 p_chao <- res_alphadiv %>% 
   left_join(livestock_sample_metadata) %>% 
-  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  #mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  #mutate(species = factor(species, levels = c("Broiler", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
   ggplot(aes(x = explicit_country, y = res_chao1, fill = species)) +
   geom_boxplot(outlier.shape = 21) +
   facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
   scale_fill_manual(values = plot_colours$species) +
-  labs(x = "Country", y = "Chao1 index") +
+  labs(x = "Country", y = "AMR richness (Chao1)") +
   guides(fill = F) +
   theme_classic(base_size = 9) +
   theme(panel.border = element_rect(linetype = "solid", fill = NA),
@@ -293,10 +289,11 @@ p_chao
 ```
 
 ```{r}
-res_alphadiv %>% 
+p_evenness = res_alphadiv %>% 
   filter(! is.na(res_shannon)) %>% 
   left_join(livestock_sample_metadata) %>% 
-  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  #mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  #mutate(species = factor(species, levels = c("Broiler", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
   ggplot(aes(x = explicit_country, y = res_shannon, fill = species)) +
   geom_boxplot(outlier.shape = 21) +
   facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
@@ -306,6 +303,173 @@ res_alphadiv %>%
   theme_light(base_size = 9) +
   theme(panel.grid.major.x = element_blank())
 
-ggsave("supp_shannon_evenness.pdf",
-       width = 17.7, height = 6, units = "cm")
+#ggsave("supp_shannon_evenness.pdf",
+#       width = 17.7, height = 6, units = "cm")
+p_evenness
 ```
+
+### Alpha Diversity (Bacterial species)
+
+
+```{r}
+bac_alphadiv <- bac_long %>% 
+  select(sample_id, species_name, fragmentCount) %>%
+  group_by(sample_id, species_name) %>% 
+  summarise(fragmentCount = sum(fragmentCount)) %>%
+  mutate(bac_chao1 = quick_chao1(fragmentCount),
+         bac_shannon = quick_shannon(fragmentCount)) %>% 
+  ungroup() %>% 
+  select(sample_id, bac_chao1, bac_shannon) %>% 
+  distinct() %>% 
+  bind_rows(data.frame(sample_id = setdiff(include_samples, res_long$sample_id),
+                       bac_chao1 = 0,
+                       stringsAsFactors = F))
+
+#ggsave("supp_shannon_evenness.pdf",
+#       width = 17.7, height = 6, units = "cm")
+bac_alphadiv
+```
+
+```{r}
+p_bac_chao <- bac_alphadiv %>% 
+  left_join(livestock_sample_metadata) %>% 
+  #mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  #mutate(species = factor(species, levels = c("Broiler", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  ggplot(aes(x = explicit_country, y = bac_chao1, fill = species)) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Country", y = "Bacterial richness (Chao1)") +
+  guides(fill = F) +
+  theme_classic(base_size = 9) +
+  theme(panel.border = element_rect(linetype = "solid", fill = NA),
+        strip.background = element_blank(),
+        axis.line = element_blank())
+
+p_bac_chao
+```
+
+```{r}
+p_bac_evenness = bac_alphadiv %>% 
+  filter(! is.na(bac_shannon)) %>% 
+  left_join(livestock_sample_metadata) %>% 
+  #mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  #mutate(species = factor(species, levels = c("Broiler", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  ggplot(aes(x = explicit_country, y = bac_shannon, fill = species)) +
+  geom_boxplot(outlier.shape = 21) +
+  facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Country", y = "Shannon index") +
+  guides(fill = F) +
+  theme_light(base_size = 9) +
+  theme(panel.grid.major.x = element_blank())
+
+#ggsave( "supp_shannon_bac_evenness.pdf",
+#       width = 17.7, height = 6, units = "cm")
+
+p_bac_evenness
+```
+## Compare bacterial and resistome diversity
+
+```{r}
+p_chao1_compare = livestock_sample_metadata %>% 
+  left_join(bac_alphadiv) %>%
+  left_join(res_alphadiv) %>%
+  # Take out fish samples - too few to be meaningful
+  filter(!species == "Fish") %>%
+  ggplot(aes(bac_chao1, res_chao1, fill = species)) + 
+  geom_point(shape = 21, size = 0.85) + 
+  stat_smooth(span = 3, size = 0.5, col = "black") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Bacterial richness (Chao1)", y = "AMR richness (Chao1)") +
+  guides(fill = F) +
+  theme_classic(base_size = 9) +
+  theme(panel.border = element_rect(linetype = "solid", fill = NA),
+        strip.background = element_blank(),
+        axis.line = element_blank())
+
+p_chao1_compare
+```
+
+```{r}
+p_evenness_compare = livestock_sample_metadata %>% 
+  left_join(bac_alphadiv) %>%
+  left_join(res_alphadiv) %>%
+  filter(!species == "Fish") %>%
+  na.omit() %>%
+  ggplot(aes(exp(bac_shannon), exp(res_shannon), fill = species)) + 
+  geom_point(shape = 21, size = 0.85) + 
+  stat_smooth(span = 3, size = 0.5, col = "black") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Effective # bacterial species", y = "Effective # AMR genes") +
+  guides(fill = F) +
+  theme_classic(base_size = 9) +
+  theme(panel.border = element_rect(linetype = "solid", fill = NA),
+        strip.background = element_blank(),
+        axis.line = element_blank())
+  
+p_evenness_compare
+```
+
+## Compare abundance and alpha diversity 
+```{r}
+# Compare AMR abundance and AMR richness
+p_alr_even = res_long %>% 
+  left_join(bact_hits) %>% 
+  mutate(fully_normalised = frags_per_bp / bact_fragments) %>%
+  group_by(sample_id) %>% 
+  mutate(total_abundance = log2(sum(fully_normalised))) %>% 
+  distinct(sample_id, total_abundance) %>% 
+  left_join(livestock_sample_metadata) %>% 
+  left_join(res_alphadiv) %>%
+  filter(!species == "Fish") %>%
+  ggplot(aes(exp(res_shannon), total_abundance, fill = species)) + 
+  geom_point(shape = 21, size = 0.85) +
+  stat_smooth(span = 3, size = 0.5, col = "black") +
+  scale_fill_manual(values = plot_colours$species) +
+  labs(x = "Effective # AMR genes", y = "Total AMR (log2 ALR)") +
+  guides(fill = F) +
+  theme_classic(base_size = 9) +
+  theme(panel.border = element_rect(linetype = "solid", fill = NA),
+        strip.background = element_blank(),
+        axis.line = element_blank())
+
+p_alr_even
+```
+
+# Make composite alpha diversity figure
+```{r}
+# pca_legend <- get_legend(p_pca)
+
+alphadiv_multi_p <- plot_grid(p_chao, 
+                           p_bac_chao, 
+                           plot_grid(p_chao1_compare, p_evenness_compare, p_alr_even, 
+                                     nrow = 1, labels = c("c", "d", "e")),
+                           ncol = 1, rel_heights = c(0.5, 0.5, 0.7), labels = c("a", "b", NULL, NULL))
+
+#ggsave("alphadiv_multi_p.pdf", plot = alphadiv_multi_p, width = 17.7, height = 17.7, units = "cm", device = cairo_pdf,
+#       family = "Arial")
+
+#ggsave("alphadiv_multi_p.png", plot = alphadiv_multi_p, width = 17.7, height = 17.7, units = "cm",
+#       family = "Arial")
+
+```
+
+
+## Other data products
+
+An 'FPKM' table for direct comparison to abundances based on the previous databases, alignment software etc.
+```{r export_fpkm_product}
+res_fpkm = res_long %>% 
+  left_join(bact_hits) %>% 
+  mutate(fpkm = frags_per_bp / bact_fragments * 10^9) %>%
+  group_by(sample_id) %>%
+  select(sample_id, gene_id, fpkm) %>%
+  pivot_wider(names_from = gene_id, values_from = fpkm) %>%
+  mutate_if(is.numeric, funs(replace_na(., 0)))
+
+#write.table(res_fpkm, file = "output/resfinder.fpkm.wide.table.txt", sep="\t", quote = F)
+```
+
+```
+

@@ -1,15 +1,29 @@
+# Introduction {-}
+
+This code presented in this workbook is meant to accompany the study,
+and give the reader the possibility to reproduce (or built) upon the analyses
+presented in the manuscript.
+
+The conceptualization, majority of the code and organization was 
+created by [Timo Röder](https://0000-0001-6841-4056) with some later changes and updates 
+by [Patrick Munk](https://orcid.org/0000-0001-8813-4019).
+
 # Data Sources {-}
 
 * European Nucleotide Archive:
   + Raw FASTQ data
 * Zenodo:
   + CatMapstat files
-* File Hosting TBD:
-* R data package:
+  + Reference GenomicsDB metadata
+  + ResFinder Metadata
+* Supplementary Material:
   + Count matrices
   + Sample Metadata
-  + Abridged Genomic Metadata (class level)
   + ResFinder Metadata
+  + Summary statistics
+  + Microbiome statistical results
+* Analysis code:
+  + Github
 
 # R Packages {-}
 You will need to load the following packages at some point during the analysis,

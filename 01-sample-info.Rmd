@@ -7,7 +7,7 @@ Metadata about the samples and the FASTQ files is packed into the R package `Roe
 so we will load that package and take it from there.
 We will also need functionality from the `tidyverse` suite of packages.
 ```{r pkgs-part1, eval=FALSE}
-library(RoederLivestockAMR)
+#library(RoederLivestockAMR)
 library(tidyverse)
 ```
 
@@ -16,6 +16,10 @@ Metadata corresponding to the metagenomic samples is contained in the data frame
 `livestock_sample_metadata`.
 ```{r tease-metadata}
 head(livestock_sample_metadata)
+
+# Change the wording from 'chicken' to 'broiler' throughout manuscript.
+#livestock_sample_metadata$species = gsub("Chicken", "Broiler", livestock_sample_metadata$species)
+#names(plot_colours$species)[3] = "Broiler"
 ```
 
 As you can maybe guess from the column names above, there are a few 
@@ -61,14 +65,12 @@ This information is also contained in the `livestock_sample_metadata` data frame
 Let's have a look at the distributions of read counts per sample in each cohort (country and species):
 ```{r plot-readno}
 p_readnos <- livestock_sample_metadata %>% 
-  filter(sample_id %in% include_samples) %>% 
-  mutate(species = factor(species, levels = c("Chicken", "Pig", "Turkey", "Veal Calf", "Fish"))) %>% 
+  filter(sample_id %in% include_samples) %>%
   ggplot(aes(x = explicit_country, y = total_fragments * 1e-06, fill = species)) +
   geom_boxplot(outlier.shape = 21) +
   facet_grid(cols = vars(species), scales = "free_x", space = "free_x") +
   scale_fill_manual(values = plot_colours$species) +
   labs(x = "Country", y = "Millions of read pairs") +
-  # ggtitle("Number of Sequenced Reads") +
   guides(fill = F) +
   theme_light(base_size = 9) +
   theme(panel.grid.major.x = element_blank())
