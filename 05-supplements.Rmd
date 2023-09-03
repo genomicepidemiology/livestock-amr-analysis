@@ -81,7 +81,7 @@ core_res_species <- res_coda_long %>%
   summarise(herds_with_gene = n()) %>% 
   ungroup() %>% 
   mutate(keep_gene = 
-           case_when(species %in% c("Chicken", "Pig") & herds_with_gene >= 162 ~ T,
+           case_when(species %in% c("Broiler", "Pig") & herds_with_gene >= 162 ~ T,
                      species %in% c("Veal Calf", "Turkey") & herds_with_gene >= 54 ~ T,
                      T ~ F)) %>% 
   filter(keep_gene)
@@ -184,27 +184,31 @@ genus_alphadiv %>%
         axis.line = element_blank())
 ```
 
+
+Let us write a number of tables to a supplementary Excel file for easier distribution
 ```{r}
-# Include the following objects in an Excel overview file
-namesOfTbls = c("livestock_sample_metadata",
+# Include the following objects in an Excel overview output file
+namesOfTbls = c("count_herds",
+                "livestock_sample_metadata",
                 "resfinder_metadata",
-                "res_group_alphadiv",
-                "genus_alphadiv",
-                "mapped_to_gen",
+                "res_filtered_wide",
                 "bact_hits",
+                "taxa_wide",
+                "core_res_country",
+                "class_alr",
+                "res_alphadiv",
+                "bac_alphadiv",
+                "genus_alphadiv",
+                "res_group_alphadiv",
+                "mapped_to_gen",
                 "taxa_mapping_count",
                 "taxa_proportions_summary",
                 "db_mapping_count",
                 "res_mapstats",
                 "res_long",
                 "res_coda_long",
-                "taxa_wide",
                 "res_wide",
-                "res_filtered_wide",
-                "bac_alphadiv",
-                "res_alphadiv",
-                "clr_vars",
-                "core_res_country")
+                "clr_vars")
 
 # Function for writing multi-page Excel based on names of tables
 MakeSpreadSheetsFunc = function(output_filename, tbl_names) {
@@ -215,11 +219,23 @@ MakeSpreadSheetsFunc = function(output_filename, tbl_names) {
                            sheetName = tbl_names[i])
     openxlsx::writeData(wb = workbook, 
                         sheet = i, 
-                        x = sheet_i)
+                        x = sheet_i,
+                        rowNames = TRUE)
   }
   openxlsx::saveWorkbook(workbook, file = output_filename)
 }
 
 MakeSpreadSheetsFunc("output/effort_suppl_tbls.xlsx", namesOfTbls)
+```
+
+# Environment images for easier continuation of work
+```{r}
+save.image()
+
+# Remove large objects
+rm(bac_long, gen_mapstats,aldex_res_clr,filtered_aldex_res_iqlr,gen_refdata,viz_clr_long)
+
+save.image(file = "smaller_environment.RData")
+
 ```
 

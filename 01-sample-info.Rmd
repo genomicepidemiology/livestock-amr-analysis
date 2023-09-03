@@ -16,10 +16,6 @@ Metadata corresponding to the metagenomic samples is contained in the data frame
 `livestock_sample_metadata`.
 ```{r tease-metadata}
 head(livestock_sample_metadata)
-
-# Change the wording from 'chicken' to 'broiler' throughout manuscript.
-#livestock_sample_metadata$species = gsub("Chicken", "Broiler", livestock_sample_metadata$species)
-#names(plot_colours$species)[3] = "Broiler"
 ```
 
 As you can maybe guess from the column names above, there are a few 
@@ -32,12 +28,12 @@ unique herds can be identified through the three attributes animal species,
 country of origin and farm ID within the country.
 ```{r count-herds}
 count_herds <- livestock_sample_metadata %>% 
-  select(species, country, farm_id) %>% 
+  select(species, explicit_country , farm_id) %>% 
   distinct() %>% 
-  group_by(species, country) %>% 
+  group_by(species, explicit_country) %>% 
   summarise(n_herds = n()) %>% 
   ungroup() %>% 
-  spread(., key = "country", value = "n_herds", fill = 0) %>% 
+  spread(., key = "explicit_country", value = "n_herds", fill = 0) %>% 
   mutate(total = rowSums(.[-1]))
 ```
 

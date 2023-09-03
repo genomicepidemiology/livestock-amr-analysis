@@ -1,6 +1,6 @@
 --- 
-title: "Analysis Code for Livestock AMR Study"
-author: "Timo Röder"
+title: "Analysis Code for The European Livestock Resistome"
+author: "Timo Röder & Patrick Munk"
 date: "`r Sys.Date()`"
 site: bookdown::bookdown_site
 output: 
@@ -8,23 +8,23 @@ output:
     split_by: chapter
     self_contained: no
 documentclass: book
-description: "Code for Livestock AMR Study"
+description: "Code for The European Livestock Resistome study"
 ---
 
 # Overview {-}
-This website presents the R code used in the study **`r RoederLivestockAMR::study_info$title`** (Röder *et al.*, [Link](`r RoederLivestockAMR::study_info$url`)).
 
-I tried to create a thorough documentation of the R code used
-in the study and welcome you to have a look at the whole process.
+This book presents the R code used in the study **The European Livestock Resistome (Munk et al)[github.com]** 
+and is meant to give the reader the possibility to reproduce (or built) upon the analyses presented in the manuscript.
 
-That being said, if you are just looking for the code behind certain figures or tables,
-here is where to find them:
+We have tried to create a thorough documentation of the R code we wrote and used in the study to analyze the resistomes and 
+welcome you to have a look at the whole process.
 
-* Figures
-  + Figure 1
-  + [Supplementary Figure S-A](#n-reads)
-* Tables
-  + [Table A](#n-herds)
-  + Supplementary Table S-A
+The vision, concept and systematic thinking behind this website truly belongs to Timo Röder,
+who also wrote the large majority of code. Patrick Munk has maintained and updated to reflect later changes to the study and has tried to keep it in the spirit of Timo who has moved on to other exciting projects.
+
+originally created by [Timo Röder](https://orcid.org/0000-0001-6841-4056) who deserves most credit.
+Later updates, changes and additions have been carried out by [Patrick Munk](https://orcid.org/0000-0001-8813-4019) who has tried to finish the project in its intended spirit.
+
+
 
 <!-- [Here](#intro) or \@ref(intro) for links-->

@@ -1,14 +1,8 @@
 # Introduction {-}
 
-This code presented in this workbook is meant to accompany the study,
-and give the reader the possibility to reproduce (or built) upon the analyses
-presented in the manuscript.
+A number of data sources are associated with this study and are detailed below.
 
-The conceptualization, majority of the code and organization was 
-created by [Timo Röder](https://0000-0001-6841-4056) with some later changes and updates 
-by [Patrick Munk](https://orcid.org/0000-0001-8813-4019).
-
-# Data Sources {-}
+## Data Sources {-}
 
 * European Nucleotide Archive:
   + Raw FASTQ data
@@ -22,10 +16,10 @@ by [Patrick Munk](https://orcid.org/0000-0001-8813-4019).
   + ResFinder Metadata
   + Summary statistics
   + Microbiome statistical results
-* Analysis code:
-  + Github
+* Code (this):
+  + Analysis code (this): On [github](github.com)
 
-# R Packages {-}
+## R Packages {-}
 You will need to load the following packages at some point during the analysis,
 so best go ahead and install them.
 ```{r load-all-pkgs, message=FALSE}
@@ -36,14 +30,9 @@ library(pheatmap)
 library(cowplot)
 library(ggrepel)
 library(viridisLite)
-
-include_samples <- livestock_sample_metadata %>% 
-  group_by(species, country, farm_id) %>% 
-  mutate(fragment_rank = min_rank(desc(total_fragments))) %>% 
-  filter(fragment_rank == 1) %>% 
-  .$sample_id
 ```
-# Plot colors
+
+## Plot colors
 Let us define some colors that we can use throughout plots
 ```{r plot-colors}
 plot_colors = list(explicit_country = c(BE="#E41A1C", BG="#377EB8", DE="#4DAF4A", 
@@ -57,7 +46,7 @@ plot_colors = list(explicit_country = c(BE="#E41A1C", BG="#377EB8", DE="#4DAF4A"
                    nofish = c(Pig="#beaed4", Broiler="#fdc086", Turkey="#ffff99", "Veal Calf"="#7fc97f"))
 ```
 
-# Loading metadata
+## Loading metadata
 The metadata on the investigated samples is available in flat tab-separated files.
 The same is the case for the ResFinder resistance genes. So let us load them.
 
@@ -67,6 +56,12 @@ livestock_sample_metadata = read_tsv("study_metadata/livestock_sample_metadata.t
 
 # Load ResFinder metadata
 resfinder_metadata = read_tsv("study_metadata/resfinder_metadata.txt")
+
+include_samples <- livestock_sample_metadata %>% 
+  group_by(species, country, farm_id) %>% 
+  mutate(fragment_rank = min_rank(desc(total_fragments))) %>% 
+  filter(fragment_rank == 1) %>% 
+  .$sample_id
 ```
 
 

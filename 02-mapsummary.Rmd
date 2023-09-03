@@ -156,6 +156,8 @@ p_respct
 
 ### Comparisons to First Results
 
+The pigs and the broilers were also analyzed with a different pipeline back in the Munk (2018) study. Let us compare the current results with those.
+
 ```{r}
 bact_hits <- db_mapping_count %>% 
   filter(db_name %in% c("plasmid_20190205", 
@@ -187,6 +189,7 @@ res_long %>%
   theme_light() +
   theme(panel.grid.major.x = element_blank())
 ```
+Let us calculate the additive log ratio (ALR)
 
 ```{r total-alr-plot}
 p_totalALRbox <- res_long %>% 
@@ -329,6 +332,31 @@ bac_alphadiv <- bac_long %>%
 #       width = 17.7, height = 6, units = "cm")
 bac_alphadiv
 ```
+### Rarefyed version
+```{r}
+genus_long %>% 
+    pivot_wider(names_from = genus_name, 
+                values_from = genus_frags, 
+                values_fill = 0) %>%
+    data.frame(., row.names = 1) %>% 
+    select(-1) %>% 
+    vegan::rrarefy(sample = 2000) %>% 
+    as_tibble(rownames = "sample_id") %>%
+    pivot_longer(cols = -1, names_to = "genus_name", values_to = "genus_frags") %>%
+    filter(genus_frags > 0) %>%
+    group_by(sample_id) %>%
+    mutate(bac_chao1 = quick_chao1(genus_frags),
+           bac_shannon = quick_shannon(genus_frags)) %>% 
+    #ungroup() %>% 
+    select(sample_id, bac_chao1, bac_shannon) %>% 
+    distinct() %>% 
+    bind_rows(data.frame(sample_id = setdiff(include_samples, res_long$sample_id),
+                         bac_chao1 = 0,
+                         stringsAsFactors = F))
+    
+  
+```
+
 
 ```{r}
 p_bac_chao <- bac_alphadiv %>% 

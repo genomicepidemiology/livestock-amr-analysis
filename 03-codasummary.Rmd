@@ -180,18 +180,18 @@ res_wide <- res_coda_long %>%
 ```{r}
 # GBM doesn't work - throws NAs before min threshold corrections, this leads
 # to an error when evaluating the if statement
-# zerocorr_res_wide <- zCompositions::cmultRepl(res_wide, method = "SQ",
-#                                               output = "p-counts")
-# 
-# clr_res <- t(apply(zerocorr_res_wide, 1, function(x){log2(x) - mean(log2(x))}))
-# 
-# res_pca <- prcomp(clr_res)
-# res_vars_pca <- res_pca$sdev^2 / sum(res_pca$sdev^2) * 100
-# 
-# res_heat_matrix <- clr_res
-# 
-# clr_res_breaks <- c(seq(min(clr_res), 0, length.out = 51), 
-#                     seq(max(clr_res) / 100, max(clr_res), length.out = 50))
+ zerocorr_res_wide <- zCompositions::cmultRepl(res_wide, method = "SQ",
+                                               output = "p-counts")
+ 
+ clr_res <- t(apply(zerocorr_res_wide, 1, function(x){log2(x) - mean(log2(x))}))
+ 
+ res_pca <- prcomp(clr_res)
+ res_vars_pca <- res_pca$sdev^2 / sum(res_pca$sdev^2) * 100
+ 
+ res_heat_matrix <- clr_res
+ 
+ clr_res_breaks <- c(seq(min(clr_res), 0, length.out = 51), 
+                     seq(max(clr_res) / 100, max(clr_res), length.out = 50))
 ```
 
 ```{r}
@@ -558,46 +558,46 @@ pheatmap(aldex_heat_matrix,
 ## Export for Determinant Analysis
 
 ```{r}
-# zerocorr_res_long <- zerocorr_res_wide %>% 
-#   rownames_to_column("sample_id") %>% 
-#   pivot_longer(-sample_id, names_to = "gene_id", values_to = "fragmentCount")
-# 
-# gene_alr <- zerocorr_res_long %>% 
-#   left_join(resfinder_metadata) %>% 
-#   mutate(frags_per_bp = fragmentCount / gene_length_bp) %>% 
-#   left_join(bact_hits) %>% 
-#   mutate(gene_full_norm = frags_per_bp / bact_fragments,
-#          gene_alr = log2(gene_full_norm)) %>% 
-#   select(gene_id, sample_id, gene_alr) %>%
-#   pivot_wider(names_from = "gene_id", values_from = "gene_alr",
-#               values_fill = list(gene_alr = NA)) 
+ zerocorr_res_long <- zerocorr_res_wide %>% 
+   rownames_to_column("sample_id") %>% 
+   pivot_longer(-sample_id, names_to = "gene_id", values_to = "fragmentCount")
+ 
+ gene_alr <- zerocorr_res_long %>% 
+   left_join(resfinder_metadata) %>% 
+   mutate(frags_per_bp = fragmentCount / gene_length_bp) %>% 
+   left_join(bact_hits) %>% 
+   mutate(gene_full_norm = frags_per_bp / bact_fragments,
+          gene_alr = log2(gene_full_norm)) %>% 
+   select(gene_id, sample_id, gene_alr) %>%
+   pivot_wider(names_from = "gene_id", values_from = "gene_alr",
+               values_fill = list(gene_alr = NA)) 
 ```
 
 ```{r}
-# grouped_alr_long <- zerocorr_res_long %>% 
-#   left_join(resfinder_metadata) %>% 
-#   mutate(frags_per_bp = fragmentCount / gene_length_bp) %>% 
-#   group_by(sample_id, amr_class) %>% 
-#   summarise(class_frags_per_bp = sum(frags_per_bp)) %>% 
-#   ungroup() %>% 
-#   left_join(bact_hits) %>% 
-#   mutate(class_full_norm = class_frags_per_bp / bact_fragments,
-#          class_alr = log2(class_full_norm)) %>%
-#   group_by(sample_id) %>% 
-#   mutate(total_alr = log2(sum(class_full_norm))) %>% 
-#   ungroup()
-# 
-# class_alr <- grouped_alr_long %>% 
-#   select(amr_class, sample_id, class_alr) %>%
-#   pivot_wider(names_from = "amr_class", values_from = "class_alr",
-#               values_fill = list(class_alr = NA)) 
-# 
-# total_alr <- grouped_alr_long %>% 
-#   distinct(sample_id, total_alr)
-# 
-# metadata_out <- res_coda_long %>% 
-#   left_join(livestock_sample_metadata) %>% 
-#   distinct(sample_id, country, species, farm_id, bio_rep, total_fragments)
+ grouped_alr_long <- zerocorr_res_long %>% 
+   left_join(resfinder_metadata) %>% 
+   mutate(frags_per_bp = fragmentCount / gene_length_bp) %>% 
+   group_by(sample_id, amr_class) %>% 
+   summarise(class_frags_per_bp = sum(frags_per_bp)) %>% 
+   ungroup() %>% 
+   left_join(bact_hits) %>% 
+   mutate(class_full_norm = class_frags_per_bp / bact_fragments,
+          class_alr = log2(class_full_norm)) %>%
+   group_by(sample_id) %>% 
+   mutate(total_alr = log2(sum(class_full_norm))) %>% 
+   ungroup()
+ 
+ class_alr <- grouped_alr_long %>% 
+   select(amr_class, sample_id, class_alr) %>%
+   pivot_wider(names_from = "amr_class", values_from = "class_alr",
+               values_fill = list(class_alr = NA)) 
+ 
+ total_alr <- grouped_alr_long %>% 
+   distinct(sample_id, total_alr)
+ 
+ metadata_out <- res_coda_long %>% 
+   left_join(livestock_sample_metadata) %>% 
+   distinct(sample_id, country, species, farm_id, bio_rep, total_fragments)
 ```
 
 ```{r export-alr, eval=F}
